@@ -81,7 +81,7 @@ class NN_multi_layer_one_width:
     def logit_pdf(self, x):
         return np.exp(-x) / ((1 + np.exp(-x)) ** 2)
 
-    def initialise_coefs(self):
+    def initialise_coefs(self,X):
         a1 = np.random.normal(loc=0.0, scale=0.01, size=(1, 1))
         b0 = np.random.normal(loc=0.0, scale=0.01, size=(1, 1))
         b_first = np.random.normal(loc=0.0, scale=0.01, size=(X.shape[1], 1))
@@ -310,7 +310,7 @@ class NN_multi_layer_one_width:
             epsilon_first_old,
             b_multi_old,
             epsilon_multi_old,
-        ) = self.initialise_coefs()
+        ) = self.initialise_coefs(X)
 
         for_teta_eps_mult_old, for_teta_b_mult_old = self.adjust_vector_dim(
             epsilon_multi_old, b_multi_old
