@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 
 
+
+
+#risk of overfit because of different biases for each layer so read papers or statquest 
 def accuracy(predicted, actual):
     return np.round(np.mean(predicted == actual), 5)
 
@@ -166,7 +169,7 @@ class NN_multi_layer_one_width:
         probability = self.probability(
             X, b_first, epsilon_first, b_multi_layers, epsilon_multi_layers, a1, b0
         )
-
+                ##parralelise
         for i in range(1, self.nb_layers + 1):  # from 1 to J layers
             # vectors multiplication element by element
             product_phi_s_prime = np.multiply.reduce(
