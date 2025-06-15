@@ -2,9 +2,6 @@ import numpy as np
 import pandas as pd
 
 
-
-
-#risk of overfit because of different biases for each layer so read papers or statquest 
 def accuracy(pred,actual):
     return np.mean((pred==actual).astype(int))
 
