@@ -1,2 +1,2 @@
 # neural_networks
-Project about neural networks: MLP, regularisations, optimisation techniques
+Project about neural networks coding in numpy 
