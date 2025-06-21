@@ -151,10 +151,14 @@ class NN_multi_layer_one_width:
                                                                            derivative=True
                                                                            ) for j in range(i,self.nb_layers+1) ]))
                    
-                    result = np.array([b_multi_layers[:,j-1-i] for j in range(i+1, self.nb_layers+1)])
-                    if result.size == 0:
-                                result = np.array([1])
-                    #scalars multiplication 
+                    
+                    if i==self.nb_layers:
+                        result=1
+           
+                    else: 
+                        result=[b_multi_layers[0][j-1-1]  for j in range(i+1,self.nb_layers+1)]
+
+
                     product_b_s=np.prod(result)
 
                     if i==1:
@@ -179,7 +183,7 @@ class NN_multi_layer_one_width:
                     gradient_c_all_storage[:,i-1]=gradient_c#.flatten()
             gradient_a1_storage=np.mean((y - probability) * gradient_a1, axis=0)
             gradient_b0_storage=np.mean((y - probability) * gradient_b0, axis=0)
-            print("‖∇b_first‖ =", np.linalg.norm(gradient_b_first_storage))
+      
 
 
        
@@ -267,7 +271,7 @@ class NN_multi_layer_one_width:
                         if  i>self.max_iter:
                                 print("reached max iterations, not converged")
                                 break
-                print(i)                                               
+                                                    
                 self.a1 = a1
                 self.b0 = b0
                 self.b_first = b_first
