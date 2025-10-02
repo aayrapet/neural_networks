@@ -39,7 +39,6 @@ This repo is my sandbox for building and experimenting with a **Multi-Layer Perc
 
 - ⏳ Batch Normalization
 - ⏳ Additional optimizers: **SGD**, **Mini-batch GD**, **Adam**
-- ⏳ Support for multi-class datasets with one-hot encoding
 - ⏳ Metrics: Precision, Recall, F1
 - ⏳ Visualization of training curves
 
