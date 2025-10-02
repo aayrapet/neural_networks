@@ -1,4 +1,4 @@
-# 🧠 MLP-from-Scratch
+# 🧠 NN-from-Scratch
 
 *A journey into building a deep learning library from the ground up.*
 
