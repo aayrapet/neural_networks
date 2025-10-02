@@ -64,230 +64,390 @@ class LogisticRegression:
         return predictions.reshape(1,-1)
 
 
+class Layer:
+    def __init__(self,nb_neurons,activation_function,regul=None,initial="random",law="normal"):       
+        self.nb_neurons=nb_neurons
+        self.activation_function = activation_function
+        self.initial = initial
+        self.law = law
+        self.regul = regul
 
-class NN_multi_layer_one_width:
-    """
-    problem with vanishing/exploding gradient with >1 layers -> introduce better initialisations and other activation functions
+def suggest_alternative(target,list_allowed,i):
+   
+    if target.lower() in list_allowed:
+        #allow only exact notation, no undercase
+        raise ValueError(
+            f"Layer {i+1}: Unknown  '{target}'. Did you mean '{target.lower()}'?"
+        )
+    try : 
+        suggestion = difflib.get_close_matches(target, list_allowed, n=1, cutoff=0.2)
+    except : 
+        raise ValueError(f"Layer {i+1}: Unknown '{target}' and no close match found.")
+    if suggestion:
+        raise ValueError(f"Layer {i+1}: Unknown '{target}'. Did you mean '{suggestion[0]}'?")
+    else:
+        raise ValueError(f"Layer {i+1}: Unknown '{target}' and no close match found.")
+    
 
 
-    """
-    def __init__(self,nb_layers,alpha=0.01,thr=1e-5,max_iter=1000):
-                
-                if nb_layers<=0:
-                        raise ValueError("nb_layers only positive integer")
+def check_init_params(str_param,param,type_of_param,prefix):
+    if not isinstance(param, type_of_param) :
+                    raise ValueError(f"{prefix}: {str_param} has to be {type_of_param.__name__} but declared as {param.__class__.__name__}")
+    if type_of_param==float or type_of_param==int:
+        if param <= 0:
+                        raise ValueError(f"{prefix}: {str_param} has to have positive non zero float but we have {str_param} =  {param}")
+
+
+
+class MLP_Classifier:
+
+    _first_time=True
+ 
+    def __init__(self,nn_infra,alpha=0.01,thr=1e-5,max_iter=1000,seed=123):
+                """
+
+                MLP
+                -----
+
+                The loss we minimize is cross-entropy (i.e., the negative log-likelihood),
+                which differs from the notation used in the PDF, thus signs are different in gradients, regularisations, updates
+
+
+                """
+                self.OUTPUT_FUNCTION={
+                "multi" : self.__softmax_output,
+                "binary" : self.__sigmoid_output,
+                }
+
+                self.ACTIV_FUNCTIONS = {
+                "sigmoid" : self.__sigmoid,
+                "relu" : self.__relu,
+                "tanh" : self.__tanh
+
+                }
+
+                self.ACTIV_DERIV_FUNCTIONS = {
+                    "sigmoid": self.__sigmoidʹ,
+                    "relu": self.__reluʹ,
+                    "tanh": self.__tanhʹ,
+                }
+  
+                self.INIT_FUNCTIONS = {
+                    "lecun": self.__lecun,
+                    "xavier": self.__xavier,
+                    "he": self.__he,
+                    "random": self.__random,
+                }
+                self.LOSS_FUNCTIONS={
+                    'multi' : self.__cross_entropy_multi,
+                    'binary' : self.__cross_entropy_binary
+                }
+                # self.OPTIM_ALGOS={
+                #     "fgd" : self.__fgd,#full gradient descent
+                #     "sgd" : self.__sgd,#stochastic gradient descent
+                #     "mbgd" : self.__mbgd,#mini-batch gradient descent
+                #     "adam" : self.__adam,#adam
+                #     #..... TBD
+                # }
+                self.REGUL_METHODS={
+                    "l2" : "self.__l2",
+                    "dropout" : "self.dropout"
+                }
+                check_init_params('alpha',alpha,float,"model parameter" )
+                check_init_params('thr',thr,float,"model parameter" )
+                check_init_params('max_iter',max_iter,int,"model parameter" )
+                self.nb_layers,self.network=self.check_and_build_layers(nn_infra)
                 self.alpha = alpha
                 self.thr = thr
                 self.max_iter=max_iter
-                self.nb_layers=nb_layers
+                self.seed=seed
                 
 
+                if MLP_Classifier._first_time:
+                    print("Don't forget to normalise input data and think about Batch normalisations")
+    
+                    MLP_Classifier._first_time=False
+    def check_and_build_layers(self,layers):
 
-    def logit_cdf(self,x):
-        return 1/(1+np.exp(-x))
-    def logit_pdf(self,x):
-        return np.exp(-x)/((1+np.exp(-x))**2)
+    
+        possible_functions = self.ACTIV_FUNCTIONS.keys()
+        possible_init=self.INIT_FUNCTIONS.keys()
+        possible_regul=self.REGUL_METHODS.keys()
+        possible_laws=["normal","uniform"]
+        result={}
+        for i, layer in enumerate(layers):
+            ##verify layers formats---------------
 
-    def initialise_coefs(self,X):
-        a1 = np.random.normal(loc=0.0, scale=1, size=(1, 1))
-        b0 = np.random.normal(loc=0.0, scale=1, size=(1, 1))
-        b_first = np.random.normal(loc=0.0, scale=1, size=(X.shape[1], 1))
-        c_first = np.random.normal(loc=0.0, scale=1, size=(1, 1))
+            check_init_params("nb of neurons",layer.nb_neurons,int,f"Layer [{i+1}]")
+            check_init_params("initialisation",layer.initial,str,f"Layer [{i+1}]")
+            
+            if not isinstance(layer.regul,tuple) and   layer.regul!=None:
+                    raise ValueError(f"Layer [{i+1}] : regul has to be list or None, but is {layer.regul.__class__.__name__}")
 
-        if self.nb_layers>1:
-                b_multi_layers=np.random.normal(loc=0.0, scale=1, size=(1, self.nb_layers-1))
-                c_multi_layers = np.random.normal(loc=0.0, scale=1, size=(1, self.nb_layers-1))
-                return a1,b0,b_first,c_first,b_multi_layers,c_multi_layers
+            try:
+                        layer.regularisation, layer.parameter = layer.regul if layer.regul else (None, None)
+            except:
+                        raise ValueError(f"Layer [{i+1}] : regul has to contain nothing or  2 parameters: regularisation and corresponding parameter")
+                        
+            if layer.regul: 
+                            check_init_params("regularisation",layer.regularisation,str,f"Layer [{i+1}]")
+                            check_init_params("param regul",layer.parameter,float,f"Layer [{i+1}]")
+            
+    
+            check_init_params("activation function",layer.activation_function,str,f"Layer [{i+1}]")
+            check_init_params("law",layer.law,str,f"Layer [{i+1}]")
+
+            verif_keys=[layer.activation_function,layer.initial,layer.regularisation,layer.law]
+            possible_lists=[possible_functions,possible_init,possible_regul,possible_laws]
+
+            ##verify that for each layers strings we have known string parameters---------------
+            for x,y in zip(verif_keys,possible_lists):
+
+                if x not in  y and x!=None:
+            
+                    suggest_alternative(x,y,i)
+
+            #construct json of architecture
+            result[i+1]=  {
+                "nb_neurons": layer.nb_neurons,
+                "activ_fct": layer.activation_function,
+                "regul": layer.regularisation,
+                "regul_param": layer.parameter,
+                "init": layer.initial,
+                "law" : layer.law
+            }
+
+        nb_layers=(i+1)
+        return nb_layers ,result
+
+
+    @staticmethod
+    def verif_train_params(func):
+        def wrapper(self,X,Y):
+            if not isinstance(X,pd.DataFrame) or not isinstance(Y,pd.DataFrame):
+                raise ValueError("Input Matrix X and target matrix/vector Y have to be DataFrame matrices")
+
+            if X.shape[0]!=Y.shape[0]:
+                raise ValueError("Matrix X and vector/matrix Y must have same number of observations (N)")
+            if not np.issubdtype(X.values.dtype, np.number)  or not np.issubdtype(Y.values.dtype, np.number):
+                raise ValueError("Matrix X and vector/matrix Y must have numeric values only, in your matrices somewhere i found non numeric value, so pre-process it ")
+            return func(self,X,Y)
+        return wrapper 
+
+    @staticmethod
+    def verif_test_params(func):
+        def wrapper(self,X):
+            if not isinstance(X,pd.DataFrame):
+                raise ValueError("Input Matrix X has to be DataFrame matrix")
+
+            
+            if X.shape[1]!=self.p:
+                raise ValueError("Matrix X_train and X_test have to have same number of columns  ")
+
+            
+            if not np.issubdtype(X.values.dtype, np.number):
+                raise ValueError("Matrix X  must have numeric values only, in your matrices somewhere i found non numeric value, so pre-process it ")
+            return func(self,X)
+        return wrapper 
+                
+    @verif_train_params
+    def train(self,X,Y):
+        self.type="multi"   if Y.shape[1]>1 else 'binary' 
+        self.X,self.Y=np.array(X),np.array(Y)
+        self.p,self.Yncol,self.N=X.shape[1],Y.shape[1],X.shape[0]
         
-        return a1,b0,b_first,c_first,None,None
+        #initialisation -------------------------
+        self.B,self.c={},{}
+        self.weight_init()
+        
+        #INITIALISE all H,Z for the first time -------------------------
+        self.Z,self.H,self.M={},{},{}
+        self.forward_pass(self.X,"train")
+
+        #calculate gradients via back propagation, update them via optimiser------------
+        self.E, self.grad_B,self.grad_c={},{},{}
+        self.optim_algo()
 
 
-    def hidden_layer(self,index,X,b_first,c_first,b_multi_layers,c_multi_layers,derivative=False):
-           
-            i=0
-            while i!=index:
-                    
-                    if i==0:
-                            lin_comb=X@b_first+c_first
-                            h_= self.logit_cdf(lin_comb)
-                                   
-                    else:
-                            lin_comb=h_*b_multi_layers[:,i-1]+c_multi_layers[:,i-1]#it is a vector but if without : error as vector in position 0 
-                            h_=self.logit_cdf(lin_comb) 
-                    i=i+1
-                            
-            return h_ if not derivative  else self.logit_pdf(lin_comb)
-    
-    def probability(self,X,b_first,c_first,b_multi_layers,c_multi_layers,a1,b0):
-            f_xi=a1*self.hidden_layer(self.nb_layers,X,b_first,c_first,b_multi_layers,c_multi_layers,derivative=False)+b0
-            return self.logit_cdf(f_xi)
+    @verif_test_params
+    def predict(self,X_test):
+
+
+        X_test_array=np.array(X_test)
+        predicted=self.forward_pass(X_test_array,"test")
+
+        if self.type=="binary":
+            return np.where(predicted>0.5)
+        else: 
+            return np.where(predicted==np.max(predicted,axis=1, keepdims=True),1,0)
+
+    def optim_algo(self):
+
+        loss_old=self.loss()
+        for i in range(self.max_iter):
+            if i%100==0:
+                y_predicted=np.where(self.y_hat>0.5,1,0)
+                
+                print(f"iteration {i} : accuracy  : {accuracy(y_predicted,self.Y)}, loss : {self.loss()}")
+            #update weights and biases inside one iteration
+            self.calculate_gradients_backprop()
+            self.update_gradients()
+            #update model parameters using new weights and biases
+            self.forward_pass(self.X,"train")
+            #calculate new loss and compare
+            loss_new=self.loss()
+
+            if np.abs(loss_new-loss_old)<self.thr:
+                print(f"Model terminated successfully, Converged at {i+1} iteration, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
+                #calculate maybe also accuracies just for info (train and test sets)
+                return 
+            loss_old=loss_new
+        print(f"Model terminated successfully, Did not Converge at {i+1} iteration, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
+
+    def weight_init(self,):
+        np.random.seed(self.seed)
+        for l in range(1,self.nb_layers+1):
             
-    def gradients(self,y,X,b_first,c_first,b_multi_layers,c_multi_layers,a1,b0):
-            
-            gradient_b_first_storage=np.zeros((X.shape[1], 1))#first b is in  Rd,  others in R
-            gradient_b_multi_storage=np.zeros((1, self.nb_layers-1))
-            gradient_c_all_storage=np.zeros((1, self.nb_layers))
-            
+            if l == 1:
+                 self.B[l] = self.__generate_weights(
+                     self.p,
+                     self.network[l]["nb_neurons"],
+                     self.network[l]["init"],
+                     self.network[l]["law"],
+                 )
+            else:
+                 self.B[l] = self.__generate_weights(
+                     self.network[l - 1]["nb_neurons"],
+                     self.network[l]["nb_neurons"],
+                     self.network[l]["init"],
+                     self.network[l]["law"],
+                 )
+ 
 
-            gradient_a1=self.hidden_layer(self.nb_layers,X,
-                                                                           b_first,
-                                                                           c_first,
-                                                                           b_multi_layers,
-                                                                           c_multi_layers,
-                                                                           derivative=False
-                                                                           )
-            gradient_b0=1
-            probability=self.probability(X,b_first,c_first,b_multi_layers,c_multi_layers,a1,b0)
-            #parallelise
-            for i in range(1,self.nb_layers+1):#from 1 to J layers
-                    #vectors multiplication element by element 
-                    product_phi_s_prime=np.multiply.reduce(np.array([self.hidden_layer(j,X,
-                                                                           b_first,
-                                                                           c_first,
-                                                                           b_multi_layers,
-                                                                           c_multi_layers,
-                                                                           derivative=True
-                                                                           ) for j in range(i,self.nb_layers+1) ]))
-                   
-                    
-                    if i==self.nb_layers:
-                        result=1
-           
-                    else: 
-                        result=[b_multi_layers[0][j-1-1]  for j in range(i+1,self.nb_layers+1)]
+            self.c[l]=np.zeros((1,self.network[l]["nb_neurons"]))
+        #set tiny variance without possibility to change for output layer 
+        self.a=np.random.normal(loc=0,scale=0.01,size=(self.network[l]["nb_neurons"],self.Yncol))
 
-
-                    product_b_s=np.prod(result)
-
-                    if i==1:
-                         hidden_previous_layer=X
-                    else:
-                         hidden_previous_layer=self.hidden_layer(i-1,X,
-                                                                           b_first,
-                                                                           c_first,
-                                                                           b_multi_layers,
-                                                                           c_multi_layers,
-                                                                           derivative=False
-                                                                           )
-                   
-
-                    gradient_b=np.mean((y - probability) * a1 *product_phi_s_prime*product_b_s* hidden_previous_layer , axis=0)
-                    gradient_c=np.mean((y - probability) * a1 *product_phi_s_prime*product_b_s,axis=0)
-                    if i==1:
-                            gradient_b=gradient_b.reshape(-1,1)
-                            gradient_b_first_storage=gradient_b
-                    else:
-                        gradient_b_multi_storage[:,i-2]=gradient_b
-                    gradient_c_all_storage[:,i-1]=gradient_c#.flatten()
-            gradient_a1_storage=np.mean((y - probability) * gradient_a1, axis=0)
-            gradient_b0_storage=np.mean((y - probability) * gradient_b0, axis=0)
-      
-
-
+        self.b=np.zeros((1,self.Yncol))
        
-            return gradient_b_first_storage,gradient_b_multi_storage,gradient_c_all_storage,gradient_a1_storage,gradient_b0_storage
+    def forward_pass(self,X,train_or_test):
+
+        for l in range(1,self.nb_layers+1):
+            if l==1:
+                self.Z[l]=X@self.B[l]+self.c[l] 
+            else:
+                self.Z[l]=self.H[l-1]@self.B[l]+self.c[l]
+            self.H[l]=self.u(self.Z[l],self.network[l]["activ_fct"])
+            if train_or_test=="train":
+                if self.network[l]["regul"]=="dropout":
+                    self.M[l]=np.where(np.random.uniform(0,1,size=self.Z[l].shape)<self.network[l]["regul_param"],1,0)
+                    self.H[l]=self.H[l]*self.M[l]/self.network[l]["regul_param"]
+
+        self.y_hat=self.OUTPUT_FUNCTION[self.type](self.H[self.nb_layers]@self.a+self.b)
+        if train_or_test=="test":
+            return self.y_hat
+        self.delta=(self.y_hat-self.Y)
+        # if self.type=="binary":
+        #     self.delta=self.delta.reshape(-1,1)
 
 
-    def gradient_update_ascent(self,y,X,b_first,c_first,b_multi_layers,c_multi_layers,a1,b0,alpha):
-                    
+    def update_gradients(self):
 
-                        (
-                        gradient_b_first_storage,
-                        gradient_b_multi_storage,
-                        gradient_c_all_storage,
-                        gradient_a1_storage,
-                        gradient_b0_storage
-                        ) = self.gradients(
-                        y,
-                        X,
-                        b_first,
-                        c_first,
-                        b_multi_layers,
-                        c_multi_layers,
-                        a1,
-                        b0
-                        )
+        for l in range(self.nb_layers,0,-1):
+            self.B[l]=self.B[l]-self.alpha*self.grad_B[l]
+            self.c[l]=self.c[l]-self.alpha*self.grad_c[l]
+        self.a=self.a-self.alpha*self.grad_a
+        self.b=self.b-self.alpha*self.grad_b
+      
+    def calculate_gradients_backprop(self,):
 
+        for l in range(self.nb_layers,0,-1):
 
-                        update_b0 =b0+alpha*gradient_b0_storage
-    
-                        update_a1=a1+alpha*gradient_a1_storage
-    
-                        update_b_first=b_first+alpha*gradient_b_first_storage
-
-                        update_c_first=c_first+alpha*gradient_c_all_storage[:,0].reshape(-1,1)
-                      
-
-                        if self.nb_layers>1:
-                                
-                                update_c_multi=c_multi_layers+alpha*gradient_c_all_storage[:,1:]
-                                update_b_multi=b_multi_layers+alpha*gradient_b_multi_storage
-                                
-                                return update_a1, update_b0, update_b_first, update_c_first,update_b_multi,update_c_multi
-                        return update_a1, update_b0, update_b_first, update_c_first,None,None
-    
-    def adjust_vector_dim(self,c_multi,b_multi):
-                for_teta_c_mult=None
-                for_teta_b_mult=None
-                if c_multi is not  None:
-
-                  for_teta_c_mult=c_multi[0].reshape(-1,1)
-                  for_teta_b_mult=b_multi[0].reshape(-1,1)
-                return for_teta_c_mult,for_teta_b_mult
-             
-
-    def get_theta_no_None(self,*args):
-            arrays = list(args)
-            arrays_to_concat = [arr for arr in arrays if arr is not None]
-            teta_old=np.concatenate(arrays_to_concat)
-            return teta_old
-    def gradient_ascent(self,X,y,alpha):
+            if l==self.nb_layers:
+                # if self.type=="binary":
+                #     self.a=self.a.reshape(1,-1)
+                self.E[l]=np.outer(self.delta,self.a)*self.uʹ(self.Z[l],self.network[l]["activ_fct"])*(1/self.N)
                 
-                a1_old,b0_old,b_first_old,c_first_old,b_multi_old,c_multi_old=self.initialise_coefs(X)
 
+            else:
+                self.E[l]=(self.E[l+1]@self.B[l+1].T)*self.uʹ(self.Z[l],self.network[l]["activ_fct"])
 
-                for_teta_c_mult_old,for_teta_b_mult_old=self.adjust_vector_dim(c_multi_old,b_multi_old)
-
+            if self.network[l]["regul"]=="dropout":
+                    self.E[l]=self.E[l]*self.M[l]/self.network[l]["regul_param"]
                 
-                teta_old=self.get_theta_no_None(a1_old,b0_old,b_first_old,c_first_old,for_teta_b_mult_old,for_teta_c_mult_old)
-                dif=np.inf
-                i=0
-                while dif>self.thr:
-                        i=i+1
-                        
-                        a1, b0, b_first, c_first,b_multi,c_multi=self.gradient_update_ascent(y,X,b_first_old,c_first_old,b_multi_old,c_multi_old,a1_old,b0_old,alpha)
-                        
-                        for_teta_c_mult,for_teta_b_mult=self.adjust_vector_dim(c_multi,b_multi)
-                        
-                        teta=self.get_theta_no_None(a1,b0,b_first,c_first,for_teta_b_mult,for_teta_c_mult)
-                       
-                        
-                        dif=np.linalg.norm(teta - teta_old)
-                        
-                        teta_old=teta
-                        a1_old,b0_old,b_first_old,c_first_old,b_multi_old,c_multi_old=a1,b0,b_first,c_first,b_multi,c_multi
-                        if  i>self.max_iter:
-                                print("reached max iterations, not converged")
-                                break
-                                                    
-                self.a1 = a1
-                self.b0 = b0
-                self.b_first = b_first
-                self.c_first = c_first
-                self.b_multi = b_multi
-                self.c_multi = c_multi
+            if l>1:
+                self.grad_B[l]=self.H[l-1].T@self.E[l]
+            else:
+                self.grad_B[l]=self.X.T@self.E[l]
+            
+            if self.network[l]["regul"]=="l2":
+                    self.grad_B[l]=self.grad_B[l]+self.network[l]["regul_param"]*self.B[l]
+            
+            self.grad_c[l]=np.ones((1,self.N))@self.E[l]
+        self.grad_a=self.H[self.nb_layers].T@self.delta*(1/self.N)
+        self.grad_b=np.ones((1,self.N))@self.delta*(1/self.N)
+        
+    def loss(self,):
+        return self.LOSS_FUNCTIONS[self.type]()
 
-    def train(self,X,y):
-                 y=y.reshape(-1,1)
-                 self.gradient_ascent(X,y,self.alpha)
+    def __cross_entropy_binary(self,):
+        #solve numerical stability issues
+        return -np.mean(self.Y*np.log(self.y_hat)+(1-self.Y)*np.log(1-self.y_hat))
+    def __cross_entropy_multi(self):
+        return -np.mean(np.sum(self.Y*np.log(self.y_hat),axis=1))
 
 
-    def predict_proba(self,X):
-                # probability(self,X,b_first,epsilon_first,b_multi_layers,epsilon_multi_layers,a1,b0):
-                return self.probability(X,self.b_first,self.c_first,self.b_multi,self.c_multi,self.a1,self.b0)
-    
-    def predict(self,X,thr=0.5):
-                predictions= (self.predict_proba(X)>thr).astype(int)
-                return predictions.reshape(1,-1)
-                
-    
+    def __generate_weights(self,fan_in,fan_out,init,law):
+        return self.INIT_FUNCTIONS[init](fan_in,fan_out,law)
+    def __lecun(self,fan_in,fan_out,law):
 
+        if law=="normal":
+            return np.random.normal(loc=0,scale=1/fan_in,size=(fan_in,fan_out))
+        elif law=="uniform":
+            return np.random.uniform(low=-np.sqrt(3/fan_in),high=np.sqrt(3/fan_in),size=(fan_in,fan_out))
+    def __xavier(self,fan_in,fan_out,law):
+
+        if law=="normal":
+            return np.random.normal(loc=0,scale=np.sqrt(2/(fan_in+fan_out)),size=(fan_in,fan_out))
+        elif law=="uniform":
+            return np.random.uniform(low=-np.sqrt(6/fan_in+fan_out),high=np.sqrt(6/fan_in+fan_out),size=(fan_in,fan_out))
+    def __he(self,fan_in,fan_out,law):
+
+        if law=="normal":
+            return np.random.normal(loc=0,scale=2/(fan_in),size=(fan_in,fan_out))
+        elif law=="uniform":
+            return np.random.uniform(low=-np.sqrt(6/fan_in),high=np.sqrt(6/fan_in),size=(fan_in,fan_out))
+    def __random(self,fan_in,fan_out,law):
+        if law=="normal":
+            return np.random.normal(loc=0,scale=1,size=(fan_in,fan_out))
+        elif law=="uniform":
+            return np.random.uniform(low=-1,high=1,size=(fan_in,fan_out))
+    def u(self,x,type_activation):
+        #in future need to import function from another library so not to define inside MLP
+        return self.ACTIV_FUNCTIONS[type_activation](x)
+    def uʹ(self,x,type_activation):
+        return self.ACTIV_DERIV_FUNCTIONS[type_activation](x)
+    def __sigmoid(self,x):
+
+        return np.where(x>=0,
+             1/(1+np.exp(-x))
+            , np.exp(x) / (1 + np.exp(x)))
+    def __sigmoidʹ(self,x):
+        return self.__sigmoid(x)*(1-self.__sigmoid(x))
+    def __relu(self,x):
+        return np.where(x<=0,
+             0
+            , x)
+    def __reluʹ(self,x):
+        return np.where(x<=0,
+             0
+            , 1)
+    def __tanh(self,x):
+        return np.tanh(x)   
+    def __tanhʹ(self,x):
+        return 1 - (np.tanh(x))**2
+    def __softmax_output(self,x):
+        return np.exp(x)/(np.sum(np.exp(x),axis=1).reshape(-1,1))
+    def __sigmoid_output(self,x):
+        return self.__sigmoid(x)
+        
