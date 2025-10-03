@@ -3,7 +3,12 @@ import pandas as pd
 
 
 def accuracy(pred,actual):
-    return np.mean((pred==actual).astype(int))
+
+    if actual.ndim==1:
+        return np.mean((pred==actual).astype(int))
+    elif actual.ndim>1:
+        return np.mean(np.argmax(pred,axis=1)==np.argmax(actual,axis=1))
+
 
 
 class LogisticRegression:
@@ -366,7 +371,7 @@ class MLP_Classifier:
             if l==self.nb_layers:
                 # if self.type=="binary":
                 #     self.a=self.a.reshape(1,-1)
-                self.E[l]=np.outer(self.delta,self.a)*self.uʹ(self.Z[l],self.network[l]["activ_fct"])*(1/self.N)
+                self.E[l]=(self.delta@self.a.T)*self.uʹ(self.Z[l],self.network[l]["activ_fct"])*(1/self.N)
                 
 
             else:
