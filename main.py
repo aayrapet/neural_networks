@@ -282,7 +282,7 @@ class MLP_Classifier:
         predicted=self.forward_pass(X_test_array,"test")
 
         if self.type=="binary":
-            return np.where(predicted>0.5)
+            return np.where(predicted>0.5,1,0)
         else: 
             return np.where(predicted==np.max(predicted,axis=1, keepdims=True),1,0)
 
