@@ -1,14 +1,16 @@
 import numpy as np
 import pandas as pd
+import numpy as np
+import pandas as pd
+import difflib
 
 
-def accuracy(pred,actual):
+def accuracy(pred,actual,type="binary"):
 
-    if actual.ndim==1:
+    if actual.shape[1]==1:
         return np.mean((pred==actual).astype(int))
-    elif actual.ndim>1:
+    elif actual.shape[1]>1:
         return np.mean(np.argmax(pred,axis=1)==np.argmax(actual,axis=1))
-
 
 
 class LogisticRegression:
@@ -69,14 +71,15 @@ class LogisticRegression:
         return predictions.reshape(1,-1)
 
 
-class Layer:
-    def __init__(self,nb_neurons,activation_function,regul=None,initial="random",law="normal"):       
-        self.nb_neurons=nb_neurons
-        self.activation_function = activation_function
-        self.initial = initial
-        self.law = law
-        self.regul = regul
 
+class Layer:
+    def __init__(self,nb_neurons,activation_function,regul=None,initial="random",law="normal"):
+        
+        self.nb_neurons=nb_neurons
+        self.activation_function=activation_function
+        self.initial=initial
+        self.law=law
+        self.regul=regul
 def suggest_alternative(target,list_allowed,i):
    
     if target.lower() in list_allowed:
@@ -108,7 +111,7 @@ class MLP_Classifier:
 
     _first_time=True
  
-    def __init__(self,nn_infra,alpha=0.01,thr=1e-5,max_iter=1000,seed=123):
+    def __init__(self,nn_infra,alpha=0.01,thr=1e-5,max_iter=1000,batch_size=None,seed=123,verbose=True):
                 """
 
                 MLP
@@ -166,6 +169,8 @@ class MLP_Classifier:
                 self.thr = thr
                 self.max_iter=max_iter
                 self.seed=seed
+                self.batch_size=batch_size
+                self.verbose=verbose
                 
 
                 if MLP_Classifier._first_time:
@@ -267,8 +272,7 @@ class MLP_Classifier:
         
         #INITIALISE all H,Z for the first time -------------------------
         self.Z,self.H,self.M={},{},{}
-        self.forward_pass(self.X,"train")
-
+        
         #calculate gradients via back propagation, update them via optimiser------------
         self.E, self.grad_B,self.grad_c={},{},{}
         self.optim_algo()
@@ -279,35 +283,61 @@ class MLP_Classifier:
 
 
         X_test_array=np.array(X_test)
-        predicted=self.forward_pass(X_test_array,"test")
+        predicted=self.forward_pass(X_test_array,None,"test")
 
+        return self.predict_here_and_now(predicted)
+    
+    def predict_here_and_now(self,final_layer):
         if self.type=="binary":
-            return np.where(predicted>0.5,1,0)
+            return np.where(final_layer>0.5,1,0)
         else: 
-            return np.where(predicted==np.max(predicted,axis=1, keepdims=True),1,0)
+            return np.where(final_layer==np.max(final_layer,axis=1, keepdims=True),1,0)
 
     def optim_algo(self):
 
-        loss_old=self.loss()
-        for i in range(self.max_iter):
-            if i%100==0:
-                y_predicted=np.where(self.y_hat>0.5,1,0)
-                
-                print(f"iteration {i} : accuracy  : {accuracy(y_predicted,self.Y)}, loss : {self.loss()}")
-            #update weights and biases inside one iteration
-            self.calculate_gradients_backprop()
-            self.update_gradients()
-            #update model parameters using new weights and biases
-            self.forward_pass(self.X,"train")
-            #calculate new loss and compare
-            loss_new=self.loss()
+        loss_old=float("inf")
+        for epoch in range(self.max_iter):
+
+            # SGD with random permutation at each epoch 
+            indices = np.random.permutation(self.N)
+            X = self.X[indices]
+            Y = self.Y[indices]
+
+            start_index=0
+
+            while start_index<self.N:
+
+                end_index=min(start_index+self.batch_size,self.N)
+
+                X_batch=X[start_index:end_index]
+                Y_batch=Y[start_index:end_index]
+
+                #start with new minibatch : forward-> backward->update weights->forward(to calculate loss)
+                self.forward_pass(X_batch,Y_batch,"train")
+                self.calculate_gradients_backprop(X_batch,end_index-start_index)
+                self.update_gradients()
+                start_index=end_index
+        
+            self.forward_pass(self.X,self.Y,"train")
+            loss_new=self.loss(self.Y)
+
+            if self.verbose:
+                if epoch%100==0:
+                    
+                    y_predicted=self.predict_here_and_now(self.y_hat)
+                    print(f"iteration {epoch} : accuracy  : {accuracy(y_predicted,self.Y)}, loss : {loss_new}")
 
             if np.abs(loss_new-loss_old)<self.thr:
-                print(f"Model terminated successfully, Converged at {i+1} iteration, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
+                if self.verbose:
+                    print(f"Model terminated successfully, Converged at {epoch+1} epoch, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
                 #calculate maybe also accuracies just for info (train and test sets)
                 return 
             loss_old=loss_new
-        print(f"Model terminated successfully, Did not Converge at {i+1} iteration, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
+
+           
+
+        print(f"Model terminated successfully, Did not Converge at {epoch+1} epoch, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
+        
 
     def weight_init(self,):
         np.random.seed(self.seed)
@@ -335,7 +365,7 @@ class MLP_Classifier:
 
         self.b=np.zeros((1,self.Yncol))
        
-    def forward_pass(self,X,train_or_test):
+    def forward_pass(self,X,Y,train_or_test):
 
         for l in range(1,self.nb_layers+1):
             if l==1:
@@ -351,9 +381,8 @@ class MLP_Classifier:
         self.y_hat=self.OUTPUT_FUNCTION[self.type](self.H[self.nb_layers]@self.a+self.b)
         if train_or_test=="test":
             return self.y_hat
-        self.delta=(self.y_hat-self.Y)
-        # if self.type=="binary":
-        #     self.delta=self.delta.reshape(-1,1)
+        self.delta=(self.y_hat-Y)
+     
 
 
     def update_gradients(self):
@@ -364,16 +393,15 @@ class MLP_Classifier:
         self.a=self.a-self.alpha*self.grad_a
         self.b=self.b-self.alpha*self.grad_b
       
-    def calculate_gradients_backprop(self,):
+    def calculate_gradients_backprop(self,X,nb_observations_inside_batch):
 
         for l in range(self.nb_layers,0,-1):
 
             if l==self.nb_layers:
                 # if self.type=="binary":
                 #     self.a=self.a.reshape(1,-1)
-                self.E[l]=(self.delta@self.a.T)*self.uʹ(self.Z[l],self.network[l]["activ_fct"])*(1/self.N)
+                self.E[l]=self.delta@self.a.T*self.uʹ(self.Z[l],self.network[l]["activ_fct"])*(1/nb_observations_inside_batch)
                 
-
             else:
                 self.E[l]=(self.E[l+1]@self.B[l+1].T)*self.uʹ(self.Z[l],self.network[l]["activ_fct"])
 
@@ -383,23 +411,23 @@ class MLP_Classifier:
             if l>1:
                 self.grad_B[l]=self.H[l-1].T@self.E[l]
             else:
-                self.grad_B[l]=self.X.T@self.E[l]
+                self.grad_B[l]=X.T@self.E[l]
             
             if self.network[l]["regul"]=="l2":
                     self.grad_B[l]=self.grad_B[l]+self.network[l]["regul_param"]*self.B[l]
             
-            self.grad_c[l]=np.ones((1,self.N))@self.E[l]
-        self.grad_a=self.H[self.nb_layers].T@self.delta*(1/self.N)
-        self.grad_b=np.ones((1,self.N))@self.delta*(1/self.N)
+            self.grad_c[l]=np.ones((1,nb_observations_inside_batch))@self.E[l]
+        self.grad_a=self.H[self.nb_layers].T@self.delta*(1/nb_observations_inside_batch)
+        self.grad_b=np.ones((1,nb_observations_inside_batch))@self.delta*(1/nb_observations_inside_batch)
         
-    def loss(self,):
-        return self.LOSS_FUNCTIONS[self.type]()
+    def loss(self,Y):
+        return self.LOSS_FUNCTIONS[self.type](Y)
 
-    def __cross_entropy_binary(self,):
+    def __cross_entropy_binary(self,Y):
         #solve numerical stability issues
-        return -np.mean(self.Y*np.log(self.y_hat)+(1-self.Y)*np.log(1-self.y_hat))
-    def __cross_entropy_multi(self):
-        return -np.mean(np.sum(self.Y*np.log(self.y_hat),axis=1))
+        return -np.mean(Y*np.log(self.y_hat)+(1-Y)*np.log(1-self.y_hat))
+    def __cross_entropy_multi(self,Y):
+        return -np.mean(np.sum(Y*np.log(self.y_hat),axis=1))
 
 
     def __generate_weights(self,fan_in,fan_out,init,law):
@@ -417,7 +445,6 @@ class MLP_Classifier:
         elif law=="uniform":
             return np.random.uniform(low=-np.sqrt(6/fan_in+fan_out),high=np.sqrt(6/fan_in+fan_out),size=(fan_in,fan_out))
     def __he(self,fan_in,fan_out,law):
-
 
         if law=="normal":
             return np.random.normal(loc=0,scale=2/(fan_in),size=(fan_in,fan_out))
