@@ -65,7 +65,7 @@ layers = [
 ]
 
 # Instantiate model
-mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam )
+mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam" )
 
 # Train (X, Y must be pandas DataFrames)
 mlp.train(X_train, Y_train)
