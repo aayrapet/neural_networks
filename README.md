@@ -28,6 +28,7 @@ This repo is my sandbox for building and experimenting with a **Multi-Layer Perc
 - ✅ Strong parameter validation with friendly error messages
 - ✅ Activation functions: **Sigmoid**, **ReLU**, **Tanh**
 - ✅ Initializations: **Random**, **Xavier**, **He**, **LeCun**
+- ✅ Additional optimizers: **SGD**, **Mini-batch GD**, **Adam**
 - ✅ Loss functions: **Binary Cross-Entropy**, **Multi-class Cross-Entropy**
 - ✅ Regularization: **L2**, **Dropout**
 - ✅ Training loop with convergence check
@@ -38,8 +39,6 @@ This repo is my sandbox for building and experimenting with a **Multi-Layer Perc
 ## 🔮 Roadmap (coming soon)
 
 - ⏳ Batch Normalization
-- ⏳ Additional optimizers: **SGD**, **Mini-batch GD**, **Adam**
-- ⏳ Metrics: Precision, Recall, F1
 - ⏳ Visualization of training curves
 
 ---
@@ -66,7 +65,7 @@ layers = [
 ]
 
 # Instantiate model
-mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42)
+mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam )
 
 # Train (X, Y must be pandas DataFrames)
 mlp.train(X_train, Y_train)
