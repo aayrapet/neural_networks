@@ -418,6 +418,7 @@ class MLP_Classifier:
             return np.random.uniform(low=-np.sqrt(6/fan_in+fan_out),high=np.sqrt(6/fan_in+fan_out),size=(fan_in,fan_out))
     def __he(self,fan_in,fan_out,law):
 
+
         if law=="normal":
             return np.random.normal(loc=0,scale=2/(fan_in),size=(fan_in,fan_out))
         elif law=="uniform":
