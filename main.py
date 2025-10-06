@@ -111,7 +111,7 @@ class MLP_Classifier:
 
     _first_time=True
  
-    def __init__(self,nn_infra,alpha=0.01,thr=1e-5,max_iter=1000,batch_size=None,seed=123,verbose=True):
+    def __init__(self,nn_infra,alpha=0.01,thr=1e-5,max_iter=1000,batch_size=None,seed=123,verbose=True,optim="vanilla SGD"):
                 """
 
                 MLP
@@ -150,13 +150,13 @@ class MLP_Classifier:
                     'multi' : self.__cross_entropy_multi,
                     'binary' : self.__cross_entropy_binary
                 }
-                # self.OPTIM_ALGOS={
-                #     "fgd" : self.__fgd,#full gradient descent
-                #     "sgd" : self.__sgd,#stochastic gradient descent
-                #     "mbgd" : self.__mbgd,#mini-batch gradient descent
-                #     "adam" : self.__adam,#adam
-                #     #..... TBD
-                # }
+                self.OPTIM_METHODS={
+                    "vanilla SGD" : self.__vanillaSGD,#classic st gradient descent
+                    "momentum" : self.__momentum,
+                    "adam" : self.__adam,
+                    "rmsprop" : self.__rmsprop,
+                
+                }
                 self.REGUL_METHODS={
                     "l2" : "self.__l2",
                     "dropout" : "self.dropout"
@@ -164,6 +164,10 @@ class MLP_Classifier:
                 check_init_params('alpha',alpha,float,"model parameter" )
                 check_init_params('thr',thr,float,"model parameter" )
                 check_init_params('max_iter',max_iter,int,"model parameter" )
+
+                if optim not in self.OPTIM_METHODS.keys():
+                    suggest_alternative(optim,self.OPTIM_METHODS.keys(),-1)
+
                 self.nb_layers,self.network=self.check_and_build_layers(nn_infra)
                 self.alpha = alpha
                 self.thr = thr
@@ -171,6 +175,7 @@ class MLP_Classifier:
                 self.seed=seed
                 self.batch_size=batch_size
                 self.verbose=verbose
+                self.optim=optim
                 
 
                 if MLP_Classifier._first_time:
@@ -183,6 +188,7 @@ class MLP_Classifier:
         possible_functions = self.ACTIV_FUNCTIONS.keys()
         possible_init=self.INIT_FUNCTIONS.keys()
         possible_regul=self.REGUL_METHODS.keys()
+      
         possible_laws=["normal","uniform"]
         result={}
         for i, layer in enumerate(layers):
@@ -216,6 +222,8 @@ class MLP_Classifier:
                 if x not in  y and x!=None:
             
                     suggest_alternative(x,y,i)
+            
+       
 
             #construct json of architecture
             result[i+1]=  {
@@ -275,7 +283,25 @@ class MLP_Classifier:
         
         #calculate gradients via back propagation, update them via optimiser------------
         self.E, self.grad_B,self.grad_c={},{},{}
+
+
+        self.initialise_params_for_optim_algos()
         self.optim_algo()
+
+    def initialise_params_for_optim_algos(self):
+
+        if self.optim!="vanilla SGD":
+            self.v_B = [np.zeros_like(b) for b in self.B]
+            self.v_c = [np.zeros_like(c) for c in self.c]
+            self.v_a = np.zeros_like(self.a)
+            self.v_b = np.zeros_like(self.b)
+            self.beta1=0.9
+            if self.optim=="adam":
+                self.m_B = [np.zeros_like(b) for b in self.B]
+                self.m_c = [np.zeros_like(c) for c in self.c]
+                self.m_a = np.zeros_like(self.a)
+                self.m_b = np.zeros_like(self.b)
+                self.beta2=0.99
 
 
     @verif_test_params
@@ -296,6 +322,7 @@ class MLP_Classifier:
     def optim_algo(self):
 
         loss_old=float("inf")
+        t=1
         for epoch in range(self.max_iter):
 
             # SGD with random permutation at each epoch 
@@ -315,8 +342,9 @@ class MLP_Classifier:
                 #start with new minibatch : forward-> backward->update weights->forward(to calculate loss)
                 self.forward_pass(X_batch,Y_batch,"train")
                 self.calculate_gradients_backprop(X_batch,end_index-start_index)
-                self.update_gradients()
+                self.update_gradients(t)
                 start_index=end_index
+                t=t+1
         
             self.forward_pass(self.X,self.Y,"train")
             loss_new=self.loss(self.Y)
@@ -333,9 +361,6 @@ class MLP_Classifier:
                 #calculate maybe also accuracies just for info (train and test sets)
                 return 
             loss_old=loss_new
-
-           
-
         print(f"Model terminated successfully, Did not Converge at {epoch+1} epoch, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
         
 
@@ -383,15 +408,107 @@ class MLP_Classifier:
             return self.y_hat
         self.delta=(self.y_hat-Y)
      
+    def update_gradients(self,t):
 
 
-    def update_gradients(self):
 
         for l in range(self.nb_layers,0,-1):
-            self.B[l]=self.B[l]-self.alpha*self.grad_B[l]
-            self.c[l]=self.c[l]-self.alpha*self.grad_c[l]
-        self.a=self.a-self.alpha*self.grad_a
-        self.b=self.b-self.alpha*self.grad_b
+            self.B[l]=self.B[l]-self.alpha*self.optim_method(self.grad_B[l],l,"weight",t)
+            self.c[l]=self.c[l]-self.alpha*self.optim_method(self.grad_c[l],l,"bias",t)
+
+        #for convention here  l=0 then it is output layer 
+        self.a=self.a-self.alpha*self.optim_method(self.grad_a,0,"weight",t)
+        self.b=self.b-self.alpha*self.optim_method(self.grad_b,0,"bias",t)
+
+    def optim_method(self,gradient,layer_index,type,t):
+
+        return self.OPTIM_METHODS[self.optim](gradient,layer_index,type,t)
+
+
+    def __vanillaSGD(self,gradient,layer_index,type,t):
+        return gradient
+
+    def __momentum(self,gradient,layer_index,type,t):
+
+
+        if layer_index>0:
+
+            if type=="weight":
+           
+                self.v_B[layer_index-1]=(1-self.beta1)*gradient+self.beta1*self.v_B[layer_index-1]
+                return self.v_B[layer_index-1]
+            elif type=="bias":
+                self.v_c[layer_index-1]=(1-self.beta1)*gradient+self.beta1*self.v_c[layer_index-1]
+                return self.v_c[layer_index-1]
+        else:
+            if type=="weight":
+           
+                self.v_a=(1-self.beta1)*gradient+self.beta1*self.v_a
+                return self.v_a
+            elif type=="bias":
+                self.v_b=(1-self.beta1)*gradient+self.beta1*self.v_b
+                return self.v_b
+
+    def __adam(self,gradient,layer_index,type,t):
+
+        if layer_index>0:
+
+            if type=="weight":
+           
+                v=(1-self.beta1)*gradient+self.beta1*self.v_B[layer_index-1]
+                m=(1-self.beta2)*(gradient**2)+self.beta2*self.m_B[layer_index-1]
+                self.v_B[layer_index-1]=v
+                self.m_B[layer_index-1]=m
+
+            elif type=="bias":
+                v=(1-self.beta1)*gradient+self.beta1*self.v_c[layer_index-1]
+                m=(1-self.beta2)*(gradient**2)+self.beta2*self.m_c[layer_index-1]
+                self.v_c[layer_index-1]=v
+                self.m_c[layer_index-1]=m
+
+        else:
+            if type=="weight":
+           
+                v=(1-self.beta1)*gradient+self.beta1*self.v_a
+
+                m=(1-self.beta2)*(gradient**2)+self.beta2*self.m_a
+                self.v_a=v
+                self.m_a=m
+            elif type=="bias":
+                v=(1-self.beta1)*gradient+self.beta1*self.v_b
+
+                m=(1-self.beta2)*(gradient**2)+self.beta2*self.m_b
+                self.v_b=v
+                self.m_b=m
+        
+        vhat=v/(1-self.beta1**t)
+        mhat=m/(1-self.beta2**t)
+               
+        return vhat/(np.sqrt(mhat)+1e-8)
+
+
+    def __rmsprop(self,gradient,layer_index,type,t):
+
+        if layer_index>0:
+
+            if type=="weight":
+                v=(1-self.beta1)*(gradient**2)+self.beta1*self.v_B[layer_index-1]
+                self.v_B[layer_index-1]=v
+               
+            elif type=="bias":
+                v=(1-self.beta1)*(gradient**2)+self.beta1*self.v_c[layer_index-1]
+                self.v_c[layer_index-1]=v
+        else:
+            if type=="weight":
+           
+                v=(1-self.beta1)*(gradient**2)+self.beta1*self.v_a
+                self.v_a=v
+            elif type=="bias":
+                v=(1-self.beta1)*(gradient**2)+self.beta1*self.v_b
+                self.v_b=v
+        return gradient/(np.sqrt(v)+1e-8)
+
+
       
     def calculate_gradients_backprop(self,X,nb_observations_inside_batch):
 
