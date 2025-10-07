@@ -1,4 +1,6 @@
 .git
 __pycache__
 optuna_mlp.db
+optuna_mlpsoftmax.db
+
 

@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pandas as pd
 import difflib
-
+from sklearn.metrics import accuracy_score
 
 def accuracy(pred,actual,type="binary"):
 
@@ -111,7 +111,7 @@ class MLP_Classifier:
 
     _first_time=True
  
-    def __init__(self,nn_infra,alpha=0.01,thr=1e-5,max_iter=1000,batch_size=None,seed=123,verbose=True,optim="vanilla SGD"):
+    def __init__(self,nn_infra,alpha=0.01,thr=1e-5,max_iter=1000,batch_size=None,seed=123,verbose=True,optim="vanilla SGD",nb_epochs_early_stopping=1000):
                 """
 
                 MLP
@@ -161,22 +161,27 @@ class MLP_Classifier:
                     "l2" : "self.__l2",
                     "dropout" : "self.dropout"
                 }
-                check_init_params('alpha',alpha,float,"model parameter" )
+    
+                check_init_params('alpha0',alpha,float,"model parameter" )
+                
                 check_init_params('thr',thr,float,"model parameter" )
                 check_init_params('max_iter',max_iter,int,"model parameter" )
+                check_init_params('nb_epochs_early_stopping',nb_epochs_early_stopping,int,"model parameter" )
 
                 if optim not in self.OPTIM_METHODS.keys():
                     suggest_alternative(optim,self.OPTIM_METHODS.keys(),-1)
 
                 self.nb_layers,self.network=self.check_and_build_layers(nn_infra)
-                self.alpha = alpha
+            
                 self.thr = thr
                 self.max_iter=max_iter
                 self.seed=seed
                 self.batch_size=batch_size
                 self.verbose=verbose
                 self.optim=optim
-                
+                self.nb_epochs_early_stopping=nb_epochs_early_stopping
+                self.alpha=alpha
+       
 
                 if MLP_Classifier._first_time:
                     print("Don't forget to normalise input data and think about Batch normalisations")
@@ -241,7 +246,7 @@ class MLP_Classifier:
 
     @staticmethod
     def verif_train_params(func):
-        def wrapper(self,X,Y):
+        def wrapper(self,X,Y,X_test=None,Y_test=None,fct=accuracy_score):
             if not isinstance(X,pd.DataFrame) or not isinstance(Y,pd.DataFrame):
                 raise ValueError("Input Matrix X and target matrix/vector Y have to be DataFrame matrices")
 
@@ -249,7 +254,18 @@ class MLP_Classifier:
                 raise ValueError("Matrix X and vector/matrix Y must have same number of observations (N)")
             if not np.issubdtype(X.values.dtype, np.number)  or not np.issubdtype(Y.values.dtype, np.number):
                 raise ValueError("Matrix X and vector/matrix Y must have numeric values only, in your matrices somewhere i found non numeric value, so pre-process it ")
-            return func(self,X,Y)
+            
+
+            if (X_test is None or Y_test is None) and not (X_test is None and  Y_test is None ):
+
+                raise ValueError("X_test or Y_test is missing but one of them is defined")
+            if not (X_test is None and  Y_test is None):
+                if not isinstance(X_test,pd.DataFrame) or not isinstance(Y_test,pd.DataFrame):
+                    raise ValueError("X_test, Y_test have to be pandas dataframes ")
+                if X_test.shape[1]!=X.shape[1]:
+                    raise ValueError('X train and X test have to have same nb of features ')
+
+            return func(self,X,Y,X_test,Y_test,fct)
         return wrapper 
 
     @staticmethod
@@ -269,7 +285,9 @@ class MLP_Classifier:
         return wrapper 
                 
     @verif_train_params
-    def train(self,X,Y):
+    def train(self,X,Y,X_test=None,Y_test=None,fct=accuracy_score):
+
+
         self.type="multi"   if Y.shape[1]>1 else 'binary' 
         self.X,self.Y=np.array(X),np.array(Y)
         self.p,self.Yncol,self.N=X.shape[1],Y.shape[1],X.shape[0]
@@ -286,7 +304,10 @@ class MLP_Classifier:
 
 
         self.initialise_params_for_optim_algos()
-        self.optim_algo()
+
+    
+
+        self.optim_algo(X_test,Y_test,fct)
 
     def initialise_params_for_optim_algos(self):
 
@@ -319,17 +340,26 @@ class MLP_Classifier:
         else: 
             return np.where(final_layer==np.max(final_layer,axis=1, keepdims=True),1,0)
 
-    def optim_algo(self):
+    def optim_algo(self,X_test,Y_test,fct):
 
-        loss_old=float("inf")
-        t=1
+        alphaT=self.alpha*0.01#alphaT is 1 prct of alpha0
+        T_for_alpha=300#for example
+        k=1
+        #the xtest ytest are None or pandas df(both)
+        if X_test is not None:
+            X_test=np.array(X_test)
+            Y_test=np.array(Y_test)
+
+        loss_old,curr_min__loss_val=float("inf"),float("inf")
+        counter_early_stop=1
+
+        oldalpha=None
+        t=1# t is used in adam optim
         for epoch in range(self.max_iter):
-
             # SGD with random permutation at each epoch 
             indices = np.random.permutation(self.N)
             X = self.X[indices]
             Y = self.Y[indices]
-
             start_index=0
 
             while start_index<self.N:
@@ -342,25 +372,61 @@ class MLP_Classifier:
                 #start with new minibatch : forward-> backward->update weights->forward(to calculate loss)
                 self.forward_pass(X_batch,Y_batch,"train")
                 self.calculate_gradients_backprop(X_batch,end_index-start_index)
-                self.update_gradients(t)
+
+                if k<T_for_alpha:
+                    alphat=(1-(k/T_for_alpha))*self.alpha+(t/T_for_alpha)*alphaT
+                    oldalpha=alphat
+                else:
+                    alphat=oldalpha
+
+                self.update_gradients(t,alphat)
                 start_index=end_index
                 t=t+1
-        
+
+            #loss comparison new vs old (on training set)
+            k=k+1
             self.forward_pass(self.X,self.Y,"train")
             loss_new=self.loss(self.Y)
-
-            if self.verbose:
-                if epoch%100==0:
-                    
-                    y_predicted=self.predict_here_and_now(self.y_hat)
-                    print(f"iteration {epoch} : accuracy  : {accuracy(y_predicted,self.Y)}, loss : {loss_new}")
 
             if np.abs(loss_new-loss_old)<self.thr:
                 if self.verbose:
                     print(f"Model terminated successfully, Converged at {epoch+1} epoch, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
-                #calculate maybe also accuracies just for info (train and test sets)
                 return 
             loss_old=loss_new
+
+
+            #see how metrics evaluate over time (train set and test set (if defined))
+            if self.verbose:
+                if epoch%50==0:
+                    
+                    print("-------------------------------------------------------------------------")
+                    y_predicted_train=self.predict_here_and_now(self.y_hat)
+                    print(f"iteration {epoch} : TRAIN {fct.__name__}  : {fct(y_predicted_train,self.Y)}, loss : {loss_new}")
+
+        
+            if X_test is not None:
+
+                self.forward_pass(X_test,Y_test,"train")
+                test_loss=self.loss(Y_test)
+
+            
+                if test_loss<curr_min__loss_val:
+                    curr_min__loss_val=test_loss
+                    counter_early_stop=1
+                else:
+                    counter_early_stop=counter_early_stop+1
+
+                if self.verbose:
+                    if epoch%50==0:
+                
+                            y_predicted_test=self.predict_here_and_now(self.y_hat)
+                            print(f"iteration {epoch} : TEST {fct.__name__}  : {fct(y_predicted_test,Y_test)}, loss : {test_loss}")
+
+
+                if counter_early_stop >=self.nb_epochs_early_stopping:
+                    print(f'early stopping at epoch {epoch}')
+                    return 
+ 
         print(f"Model terminated successfully, Did not Converge at {epoch+1} epoch, for a given alpha :  {self.alpha} and given threshold : {self.thr} ")
         
 
@@ -408,17 +474,17 @@ class MLP_Classifier:
             return self.y_hat
         self.delta=(self.y_hat-Y)
      
-    def update_gradients(self,t):
+    def update_gradients(self,t,alphat):
 
 
 
         for l in range(self.nb_layers,0,-1):
-            self.B[l]=self.B[l]-self.alpha*self.optim_method(self.grad_B[l],l,"weight",t)
-            self.c[l]=self.c[l]-self.alpha*self.optim_method(self.grad_c[l],l,"bias",t)
+            self.B[l]=self.B[l]-alphat*self.optim_method(self.grad_B[l],l,"weight",t)
+            self.c[l]=self.c[l]-alphat*self.optim_method(self.grad_c[l],l,"bias",t)
 
         #for convention here  l=0 then it is output layer 
-        self.a=self.a-self.alpha*self.optim_method(self.grad_a,0,"weight",t)
-        self.b=self.b-self.alpha*self.optim_method(self.grad_b,0,"bias",t)
+        self.a=self.a-alphat*self.optim_method(self.grad_a,0,"weight",t)
+        self.b=self.b-alphat*self.optim_method(self.grad_b,0,"bias",t)
 
     def optim_method(self,gradient,layer_index,type,t):
 
