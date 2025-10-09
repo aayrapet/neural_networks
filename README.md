@@ -15,10 +15,14 @@ The best way to truly understand:
 - **Weight initialization**
 - **Regularization**
 - **Optimizers**
+- **Batch_norm**
 
 …is to code them by hand.
 
-This repo is my sandbox for building and experimenting with a **Multi-Layer Perceptron (MLP)** from scratch.
+This repo is my sandbox for building and experimenting with a **Multi-Layer Perceptron (MLP)** from scratch. Other models TBD
+
+
+The link to theoretical pdf: https://www.overleaf.com/read/pmbzgsrrdxws#08d781
 
 ---
 
