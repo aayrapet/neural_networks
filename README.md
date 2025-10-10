@@ -35,15 +35,16 @@ The link to theoretical pdf: https://www.overleaf.com/read/pmbzgsrrdxws#08d781
 - ✅ Additional optimizers: **SGD**, **Mini-batch GD**, **Adam**
 - ✅ Loss functions: **Binary Cross-Entropy**, **Multi-class Cross-Entropy**
 - ✅ Regularization: **L2**, **Dropout**
-- ✅ Training loop with convergence check
-- ✅ Debug prints for loss & accuracy during training
+- ✅ Training loop with convergence check and early stopping.
+- ✅ Batch-normalisation 
+
 
 ---
 
 ## 🔮 Roadmap (coming soon)
 
-- ⏳ Batch Normalization
-- ⏳ Visualization of training curves
+- ⏳ CNN
+
 
 ---
 
@@ -64,16 +65,19 @@ from main import Layer, MLP_Classifier
 
 # Define architecture
 layers = [
-    Layer(8, "tanh", regul=("dropout", 0.5), initial="xavier"),
-    Layer(4, "relu", regul=("l2", 0.9), initial="he"),
+    Layer(8, "tanh", regul=("dropout", 0.5), initial="xavier",batchnorm=True),
+    Layer(4, "relu", regul=("l2", 0.9), initial="he",),
+    Layer(100, "relu", initial="he",law="uniform"),
 ]
 
 # Instantiate model
-mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam" )
+mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam", batch_size=100, nb_epochs_early_stopping=50)
 
 # Train (X, Y must be pandas DataFrames)
 mlp.train(X_train, Y_train)
 
+#or with test set just to see validation data set performance during training
+mlp.train(X_train, Y_train,X_test,Y_test)
 # Predict
 preds = mlp.predict(X_test)
 
