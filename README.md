@@ -64,11 +64,11 @@ import pandas as pd
 from main import Layer, MLP_Classifier
 
 # Define architecture
-layers = [
+layers = (
     Layer(8, "tanh", regul=("dropout", 0.5), initial="xavier",batchnorm=True),
     Layer(4, "relu", regul=("l2", 0.9), initial="he",),
     Layer(100, "relu", initial="he",law="uniform"),
-]
+)
 
 # Instantiate model
 mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam", batch_size=100, nb_epochs_early_stopping=50)
