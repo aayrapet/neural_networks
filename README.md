@@ -22,7 +22,7 @@ The best way to truly understand:
 This repo is my sandbox for building and experimenting with a **Multi-Layer Perceptron (MLP)** from scratch. Other models TBD
 
 
-The link to theoretical pdf: https://www.overleaf.com/read/pmbzgsrrdxws#08d781
+The link to theoretical pdf: [https://www.overleaf.com/read/pmbzgsrrdxws#08d781](https://www.overleaf.com/read/pmbzgsrrdxws#08d781)
 
 ---
 
