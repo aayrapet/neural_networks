@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
-import difflib
-from sklearn.metrics import accuracy_score
 
+from sklearn.metrics import accuracy_score
+from nnModules import check_and_build_layers,suggest_alternative,check_init_params
+from layers import Layer
 from typing import  (
     Any,
     Callable,
@@ -15,65 +16,8 @@ from typing import  (
 )
 
 
-class Layer:
-    def __init__(
-        self,
-        nb_neurons: int,
-        activation_function: str,
-        regul: Optional[Tuple[str, float]] = None,
-        batchnorm: bool = False,
-        initial: str = "lecun",
-        law: str = "normal",
-    ) -> None:
-
-        self.nb_neurons = nb_neurons
-        self.activation_function = activation_function
-        self.initial = initial
-        self.law = law
-        self.regul = regul
-        self.batchnorm = batchnorm
 
 
-def suggest_alternative(target: str, keys_allowed: KeysView[str], i: int) -> None:
-    if target.lower() in keys_allowed:
-        # allow only exact notation, no undercase
-        msg = f"Layer {i+1}: Unknown '{target}'. " f"Did you mean '{target.lower()}'?"
-        raise ValueError(msg)
-
-    try:
-        suggestion = difflib.get_close_matches(
-            target, list(keys_allowed), n=1, cutoff=0.2
-        )
-    except Exception as e:
-        msg = (
-            f"Layer {i+1}: Unknown '{target}' and no close match found. "
-            f"(Error: {e})"
-        )
-        raise ValueError(msg) from e
-
-    if suggestion:
-        msg = f"Layer {i+1}: Unknown '{target}'. " f"Did you mean '{suggestion[0]}'?"
-        raise ValueError(msg)
-
-    raise ValueError(f"Layer {i+1}: Unknown '{target}' and no close match found.")
-
-
-def check_init_params(
-    str_param: str, param: Any, type_of_param: type, prefix: str
-) -> None:
-    if not isinstance(param, type_of_param):
-        msg = (
-            f"{prefix}: {str_param} has to be {type_of_param.__name__}, "
-            f"but declared as {param.__class__.__name__}"
-        )
-        raise ValueError(msg)
-    if type_of_param == float or type_of_param == int:
-        if param <= 0:
-            msg = (
-                f"{prefix}: {str_param} has to have positive non zero float, "
-                f"but we have {str_param} =  {param}"
-            )
-            raise ValueError(msg)
 
 
 class MLP_Classifier:
@@ -150,7 +94,14 @@ class MLP_Classifier:
         if optim not in self.OPTIM_METHODS.keys():
             suggest_alternative(optim, self.OPTIM_METHODS.keys(), -1)
 
-        self.nb_layers, self.network = self.check_and_build_layers(nn_infra)
+        self.nb_layers, self.network = check_and_build_layers(
+            nn_infra,
+            possible_functions = self.ACTIV_FUNCTIONS.keys(),
+            possible_init = self.INIT_FUNCTIONS.keys(),
+            possible_regul = self.REGUL_METHODS.keys(),
+            possible_laws = self.LAWS.keys()
+            
+        )
 
         self.thr = thr
         self.max_iter = max_iter
@@ -172,84 +123,7 @@ class MLP_Classifier:
 
             MLP_Classifier._first_time = False
 
-    def check_and_build_layers(self, layers: Tuple[Layer]) -> Tuple[int, Dict[int, Dict[str, Union[int, str, float, bool, None]]]]:
-
-        possible_functions = self.ACTIV_FUNCTIONS.keys()
-        possible_init = self.INIT_FUNCTIONS.keys()
-        possible_regul = self.REGUL_METHODS.keys()
-        possible_laws = self.LAWS.keys()
-        result = {}
-        if layers is None or len(layers) == 0 or not isinstance(layers, tuple):
-            raise ValueError("You have to define at least one layer in a tuple")
-
-        for i, layer in enumerate(layers):
-            ##verify layers formats---------------
-
-            check_init_params("batchnorm", layer.batchnorm, bool, f"Layer [{i+1}]")
-            check_init_params("nb of neurons", layer.nb_neurons, int, f"Layer [{i+1}]")
-            check_init_params("initialisation", layer.initial, str, f"Layer [{i+1}]")
-
-            if not isinstance(layer.regul, tuple) and layer.regul != None:
-                raise ValueError(
-                    f"Layer [{i+1}] : regul has to be tuple or None, but is {layer.regul.__class__.__name__}"
-                )
-
-            try:
-                layer.regularisation, layer.parameter = (
-                    layer.regul if layer.regul else (None, None)
-                )
-            except Exception :
-                raise ValueError(
-                    f"Layer [{i+1}] : regul has to contain nothing or 2 parameters: regularisation and corresponding parameter"
-                )
-
-            if layer.regul:
-                check_init_params(
-                    "regularisation", layer.regularisation, str, f"Layer [{i+1}]"
-                )
-                check_init_params(
-                    "param regul", layer.parameter, float, f"Layer [{i+1}]"
-                )
-
-            check_init_params(
-                "activation function", layer.activation_function, str, f"Layer [{i+1}]"
-            )
-            check_init_params("law", layer.law, str, f"Layer [{i+1}]")
-
-            verif_keys = [
-                layer.activation_function,
-                layer.initial,
-                layer.regularisation,
-                layer.law,
-            ]
-            possible_lists = [
-                possible_functions,
-                possible_init,
-                possible_regul,
-                possible_laws,
-            ]
-
-            ##verify that for each layers strings we have known string parameters---------------
-            for x, y in zip(verif_keys, possible_lists):
-
-                if x not in y and x != None:
-
-                    suggest_alternative(x, y, i)
-
-            # construct json of architecture
-            result[i + 1] = {
-                "nb_neurons": layer.nb_neurons,
-                "activ_fct": layer.activation_function,
-                "regul": layer.regularisation,
-                "regul_param": layer.parameter,
-                "init": layer.initial,
-                "law": layer.law,
-                "batchnorm": layer.batchnorm,
-            }
-
-        nb_layers = i + 1
-        return nb_layers, result
-
+  
     @staticmethod
     def verif_train_params(func: Callable) -> Callable:
         def wrapper(
