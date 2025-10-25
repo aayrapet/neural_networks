@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from sklearn.metrics import accuracy_score
-from nnModules import check_and_build_layers,suggest_alternative,check_init_params
+from nnModules import NN_Modules
 from layers import Layer
 from typing import  (
     Any,
@@ -16,11 +16,7 @@ from typing import  (
 )
 
 
-
-
-
-
-class MLP_Classifier:
+class MLP_Classifier(NN_Modules):
 
     _first_time: bool = True
 
@@ -46,61 +42,22 @@ class MLP_Classifier:
 
 
         """
-        self.OUTPUT_FUNCTION: Dict[str, Callable[[np.ndarray], np.ndarray]] = {
-            "multi": self.__softmax_output,
-            "binary": self.__sigmoid_output,
-        }
+        super().__init__(optim=optim)
 
-        self.ACTIV_FUNCTIONS: Dict[str, Callable[[np.ndarray], np.ndarray]] = {
-            "sigmoid": self.__sigmoid,
-            "relu": self.__relu,
-            "tanh": self.__tanh,
-        }
-
-        self.ACTIV_DERIV_FUNCTIONS: Dict[str, Callable[[np.ndarray], np.ndarray]] = {
-            "sigmoid": self.__sigmoidʹ,
-            "relu": self.__reluʹ,
-            "tanh": self.__tanhʹ,
-        }
-
-        self.INIT_FUNCTIONS: Dict[str, Callable[[int, int, str], np.ndarray]] = {
-            "lecun": self.__lecun,
-            "xavier": self.__xavier,
-            "he": self.__he,
-            "random": self.__random,
-        }
-        self.LOSS_FUNCTIONS: Dict[str, Callable[[np.ndarray], float]] = {
-            "multi": self.__cross_entropy_multi,
-            "binary": self.__cross_entropy_binary,
-        }
-        self.OPTIM_METHODS: Dict[
-            str, Callable[[np.ndarray, int, int, str, str], np.ndarray]
-        ] = {
-            "vanilla SGD": self.__vanillaSGD,  # classic st gradient descent
-            "momentum": self.__momentum,
-            "adam": self.__adam,
-            "rmsprop": self.__rmsprop,
-        }
-        self.REGUL_METHODS: Dict[str, None] = {"l2": None, "dropout": None}
-        self.LAWS: Dict[str, None] = {"normal": None, "uniform": None}
+        
         # Parameter checks
-        check_init_params("alpha0", alpha, float, "model parameter")
-        check_init_params("thr", thr, float, "model parameter")
-        check_init_params("max_iter", max_iter, int, "model parameter")
-        check_init_params(
+        super().check_init_params("alpha0", alpha, float, "model parameter")
+        super().check_init_params("thr", thr, float, "model parameter")
+        super().check_init_params("max_iter", max_iter, int, "model parameter")
+        super().check_init_params(
             "nb_epochs_early_stopping", nb_epochs_early_stopping, int, "model parameter"
         )
 
         if optim not in self.OPTIM_METHODS.keys():
-            suggest_alternative(optim, self.OPTIM_METHODS.keys(), -1)
+            super().suggest_alternative(optim, self.OPTIM_METHODS.keys(), -1)
 
-        self.nb_layers, self.network = check_and_build_layers(
-            nn_infra,
-            possible_functions = self.ACTIV_FUNCTIONS.keys(),
-            possible_init = self.INIT_FUNCTIONS.keys(),
-            possible_regul = self.REGUL_METHODS.keys(),
-            possible_laws = self.LAWS.keys()
-            
+        self.nb_layers, self.nb_cnn_layers, self.network = super().check_and_build_layers(
+            nn_infra
         )
 
         self.thr = thr
@@ -241,7 +198,8 @@ class MLP_Classifier:
         # for EMA with mean and sigma2, the final running statistics will be used for inference
         self.mean_running, self.sigma2_running = {}, {}
         # initialise parameters for EMA for some optimisers
-        self.initialise_params_for_optim_algos()
+
+        super().initialise_params_for_optim_algos(self.c,self.B,self.a,self.b)
         self.initialise_params_ema_batchnorm()
 
         # ----------------BACKPROPAGATION and SGD-------------------------------
@@ -262,32 +220,7 @@ class MLP_Classifier:
             if self.network[key]["batchnorm"]
         }
 
-    def initialise_params_for_optim_algos(self):
-        vector = {key: np.zeros_like(val) for key, val in self.c.items()}
-        for_B = {key: np.zeros_like(val) for key, val in self.B.items()}
-        for_c = vector  # same shapes
-        for_a = {}
-        for_b = {}
-        for_a[0] = np.zeros_like(self.a)
-        for_b[0] = np.zeros_like(self.b)
 
-        if self.optim != "vanilla SGD":
-            self.v_B = for_B
-            self.v_c = for_c
-            self.v_a = for_a
-            self.v_b = for_b
-            self.v_gamma = vector
-            self.v_beta = vector
-
-            self.beta1 = 0.9
-            if self.optim == "adam":
-                self.m_B = for_B
-                self.m_c = for_c
-                self.m_a = for_a
-                self.m_b = for_b
-                self.m_gamma = vector
-                self.m_beta = vector
-                self.beta2 = 0.99
 
     @verif_test_params
     def predict(self, X_test : pd.DataFrame) -> np.ndarray:
@@ -358,7 +291,7 @@ class MLP_Classifier:
             # loss comparison new vs old (on training set)
             k = k + 1
             self.forward_pass(self.X, self.Y, "train")
-            loss_new = self.loss(self.Y)
+            loss_new = self.loss(self.Y,self.y_hat)
 
             if np.abs(loss_new - loss_old) < self.thr:
                 if self.verbose:
@@ -383,7 +316,7 @@ class MLP_Classifier:
             if X_test is not None:
 
                 self.forward_pass(X_test, Y_test, "train")
-                test_loss = self.loss(Y_test)
+                test_loss = self.loss(Y_test,self.y_hat)
 
                 if test_loss < curr_min__loss_val:
                     curr_min__loss_val = test_loss
@@ -414,14 +347,14 @@ class MLP_Classifier:
         for l in range(1, self.nb_layers + 1):
 
             if l == 1:
-                self.B[l] = self.__generate_weights(
+                self.B[l] = super().generate_weights(
                     self.p,
                     self.network[l]["nb_neurons"],
                     self.network[l]["init"],
                     self.network[l]["law"],
                 )
             else:
-                self.B[l] = self.__generate_weights(
+                self.B[l] = super().generate_weights(
                     self.network[l - 1]["nb_neurons"],
                     self.network[l]["nb_neurons"],
                     self.network[l]["init"],
@@ -439,6 +372,7 @@ class MLP_Classifier:
         )
 
         self.b = np.zeros((1, self.Yncol))
+
 
     def forward_pass(self, X, Y, train_or_test):
 
@@ -461,10 +395,10 @@ class MLP_Classifier:
 
                 self.Zhat[l] = (self.Z[l] - mean) / np.sqrt((sigma2) + 1e-08)
                 self.BN[l] = self.Zhat[l] * self.gamma[l] + self.beta[l]
-                self.H[l] = self.u(self.BN[l], self.network[l]["activ_fct"])
+                self.H[l] = super().u(self.BN[l], self.network[l]["activ_fct"])
             else:
 
-                self.H[l] = self.u(self.Z[l], self.network[l]["activ_fct"])
+                self.H[l] = super().u(self.Z[l], self.network[l]["activ_fct"])
 
             if train_or_test == "train":
                 if self.network[l]["regul"] == "dropout":
@@ -486,76 +420,23 @@ class MLP_Classifier:
     def update_gradients(self, t, alphat):
 
         for l in range(self.nb_layers, 0, -1):
-            self.B[l] = self.B[l] - alphat * self.optim_method(
+            self.B[l] = self.B[l] - alphat * super().optim_method(
                 self.grad_B[l], l, t, "v_B", "m_B"
             )
-            self.c[l] = self.c[l] - alphat * self.optim_method(
+            self.c[l] = self.c[l] - alphat * super().optim_method(
                 self.grad_c[l], l, t, "v_c", "m_c"
             )
             if self.network[l]["batchnorm"]:
 
-                self.gamma[l] = self.gamma[l] - alphat * self.optim_method(
+                self.gamma[l] = self.gamma[l] - alphat * super().optim_method(
                     self.grad_gamma[l], l, t, "v_gamma", "m_gamma"
                 )
-                self.beta[l] = self.beta[l] - alphat * self.optim_method(
+                self.beta[l] = self.beta[l] - alphat * super().optim_method(
                     self.grad_beta[l], l, t, "v_beta", "m_beta"
                 )
         # for convention here  l=0 then it is output layer
-        self.a = self.a - alphat * self.optim_method(self.grad_a, 0, t, "v_a", "m_a")
-        self.b = self.b - alphat * self.optim_method(self.grad_b, 0, t, "v_b", "m_b")
-
-    @staticmethod
-    def check_optim_methods(func):
-        def wrapper(self, gradient, layer_index, t, *args):
-
-            if self.optim != "vanilla SGD":
-                for el in args:
-                    if not hasattr(self, el):
-                        raise ValueError(f"not recognised attribute '{el}'")
-            return func(self, gradient, layer_index, t, *args)
-
-        return wrapper
-
-    @check_optim_methods
-    def optim_method(self, gradient, layer_index, t, *args):
-
-        return self.OPTIM_METHODS[self.optim](gradient, layer_index, t, *args)
-
-    def __vanillaSGD(self, gradient, layer_index, t, *args):
-        return gradient
-
-    def __momentum(self, gradient, layer_index, t, *args):
-
-        this_attrib = getattr(self, args[0])  # supports only one (v)
-
-        this_attrib[layer_index] = (
-            1 - self.beta1
-        ) * gradient + self.beta1 * this_attrib[layer_index]
-        return this_attrib[layer_index]
-
-    def __adam(self, gradient, layer_index, t, *args):
-
-        v_attr = getattr(self, args[0])
-        m_attr = getattr(self, args[1])
-
-        v = (1 - self.beta1) * gradient + self.beta1 * v_attr[layer_index]
-        m = (1 - self.beta2) * (gradient**2) + self.beta2 * m_attr[layer_index]
-        v_attr[layer_index] = v
-        m_attr[layer_index] = m
-
-        vhat = v / (1 - self.beta1**t)
-        mhat = m / (1 - self.beta2**t)
-
-        return vhat / (np.sqrt(mhat) + 1e-8)
-
-    def __rmsprop(self, gradient, layer_index, t, *args):
-
-        this_attrib = getattr(self, args[0])  # supports only one (v)
-
-        v = (1 - self.beta1) * (gradient**2) + self.beta1 * this_attrib[layer_index]
-        this_attrib[layer_index] = v
-
-        return gradient / (np.sqrt(v) + 1e-8)
+        self.a = self.a - alphat * super().optim_method(self.grad_a, 0, t, "v_a", "m_a")
+        self.b = self.b - alphat * super().optim_method(self.grad_b, 0, t, "v_b", "m_b")
 
     def calculate_gradients_backprop(self, X, nb_observations_inside_batch):
 
@@ -570,11 +451,11 @@ class MLP_Classifier:
                     V_l = (
                         self.delta
                         @ self.a.T
-                        * self.uʹ(self.BN[l], self.network[l]["activ_fct"])
+                        * super().uʹ(self.BN[l], self.network[l]["activ_fct"])
                         * (1 / nb_observations_inside_batch)
                     )
                 else:
-                    V_l = (self.E[l + 1] @ self.B[l + 1].T) * self.uʹ(
+                    V_l = (self.E[l + 1] @ self.B[l + 1].T) * super().uʹ(
                         self.BN[l], self.network[l]["activ_fct"]
                     )
 
@@ -612,12 +493,12 @@ class MLP_Classifier:
                     self.E[l] = (
                         self.delta
                         @ self.a.T
-                        * self.uʹ(self.Z[l], self.network[l]["activ_fct"])
+                        * super().uʹ(self.Z[l], self.network[l]["activ_fct"])
                         * (1 / nb_observations_inside_batch)
                     )
 
                 else:
-                    self.E[l] = (self.E[l + 1] @ self.B[l + 1].T) * self.uʹ(
+                    self.E[l] = (self.E[l + 1] @ self.B[l + 1].T) * super().uʹ(
                         self.Z[l], self.network[l]["activ_fct"]
                     )
 
@@ -641,82 +522,7 @@ class MLP_Classifier:
         )
         self.grad_b = vector_ones @ self.delta * (1 / nb_observations_inside_batch)
 
-    def loss(self, Y):
-        return self.LOSS_FUNCTIONS[self.type](Y)
+    def loss(self, Y,y_hat):
+        return self.LOSS_FUNCTIONS[self.type](Y,y_hat)
 
-    def __cross_entropy_binary(self, Y):
-        eps = 1e-8
-        p = np.clip(self.y_hat, eps, 1 - eps)
-        return -np.mean(Y * np.log(p) + (1 - Y) * np.log(1 - p))
-
-    def __cross_entropy_multi(self, Y):
-        eps = 1e-8
-        p = np.clip(self.y_hat, eps, 1 - eps)
-        return -np.mean(np.sum(Y * np.log(p), axis=1))
-
-    def __generate_weights(self, fan_in, fan_out, init, law):
-        return self.INIT_FUNCTIONS[init](fan_in, fan_out, law)
-
-    def __lecun(self, fan_in, fan_out, law):
-        if law == "normal":
-            return np.random.normal(0, np.sqrt(1 / fan_in), (fan_in, fan_out))
-        else:
-            a = np.sqrt(3 / fan_in)
-            return np.random.uniform(-a, a, (fan_in, fan_out))
-
-    def __xavier(self, fan_in, fan_out, law):
-        if law == "normal":
-            return np.random.normal(
-                0, np.sqrt(2 / (fan_in + fan_out)), (fan_in, fan_out)
-            )
-        else:
-            a = np.sqrt(6 / (fan_in + fan_out))
-            return np.random.uniform(-a, a, (fan_in, fan_out))
-
-    def __he(self, fan_in, fan_out, law):
-        if law == "normal":
-            return np.random.normal(0, np.sqrt(2 / fan_in), (fan_in, fan_out))
-        else:
-            a = np.sqrt(6 / fan_in)
-            return np.random.uniform(-a, a, (fan_in, fan_out))
-
-    def __random(self, fan_in, fan_out, law):
-        if law == "normal":
-            return np.random.normal(loc=0, scale=1, size=(fan_in, fan_out))
-        elif law == "uniform":
-            return np.random.uniform(low=-1, high=1, size=(fan_in, fan_out))
-
-    def u(self, x, type_activation):
-        # in future need to import function from another library so not to define inside MLP
-        return self.ACTIV_FUNCTIONS[type_activation](x)
-
-    def uʹ(self, x, type_activation):
-        return self.ACTIV_DERIV_FUNCTIONS[type_activation](x)
-
-    def __sigmoid(self, x):
-
-        return np.where(x >= 0, 1 / (1 + np.exp(-x)), np.exp(x) / (1 + np.exp(x)))
-
-    def __sigmoidʹ(self, x):
-        return self.__sigmoid(x) * (1 - self.__sigmoid(x))
-
-    def __relu(self, x):
-        return np.where(x <= 0, 0, x)
-
-    def __reluʹ(self, x):
-        return np.where(x <= 0, 0, 1)
-
-    def __tanh(self, x):
-        return np.tanh(x)
-
-    def __tanhʹ(self, x):
-        return 1 - (np.tanh(x)) ** 2
-
-    def __softmax_output(self, x):
-        # https://en.wikipedia.org/wiki/Softmax_function
-        x_shift = x - np.max(x, axis=1, keepdims=True)
-        ex = np.exp(x_shift)
-        return ex / np.sum(ex, axis=1, keepdims=True)
-
-    def __sigmoid_output(self, x):
-        return self.__sigmoid(x)
+   

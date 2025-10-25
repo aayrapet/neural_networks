@@ -1,4 +1,4 @@
-from torch_cnn_operations import convolution_torch, maxpooling_torch
+from torch_cnn_operations import convolution_torch, maxpooling_torch,flatten_torch
 
 class Layer:
     def __init__(
@@ -19,7 +19,7 @@ class Layer:
         self.batchnorm = batchnorm
 
 class ConvLayer:
-    def __init__(self,in_channels,output_channels,kernel_size,stride,padding,batchnorm,initial,activation_function,law,regul):
+    def __init__(self,in_channels,output_channels,kernel_size,stride,padding,activation_function,regul,initial="lecun",law="normal",batchnorm=False):
 
         self.in_channels=in_channels
         self.output_channels=output_channels
@@ -40,9 +40,6 @@ class MaxPoolLayer:
         self.padding=padding
         self.function=maxpooling_torch    
 
-
-
-!!!!!!!!!
 class FlatLayer:
     def __init__(self):
-        self.function=flatten
+        self.function=flatten_torch

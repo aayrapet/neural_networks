@@ -2,7 +2,6 @@ from numpy_cnn_operations import calculate_optimal_padding
 import torch.nn.functional as F
 import torch
     
-
 def padding_torch(img_array_perm,padding,stride,kernel_size):
         if padding: 
 
@@ -36,3 +35,6 @@ def maxpooling_torch(img_array_perm,kernel_size,stride=2,padding=True):
         stride=stride,     
     )
     return out
+
+def flatten_torch(img_array_perm):
+    return img_array_perm.reshape(img_array_perm.shape[0],-1)
