@@ -346,20 +346,16 @@ class MLP_Classifier(NN_Modules):
         np.random.seed(self.seed)
         for l in range(1, self.nb_layers + 1):
 
-            if l == 1:
-                self.B[l] = super().generate_weights(
-                    self.p,
-                    self.network[l]["nb_neurons"],
-                    self.network[l]["init"],
-                    self.network[l]["law"],
-                )
-            else:
-                self.B[l] = super().generate_weights(
-                    self.network[l - 1]["nb_neurons"],
-                    self.network[l]["nb_neurons"],
-                    self.network[l]["init"],
-                    self.network[l]["law"],
-                )
+        
+            fan_in=self.p if l==1 else self.network[l - 1]["nb_neurons"]
+          
+            self.B[l] = super().generate_weights(
+                fan_in=fan_in,
+                fan_out=self.network[l]["nb_neurons"],
+                shape=(fan_in,self.network[l]["nb_neurons"]),
+                init=self.network[l]["init"],
+                law=self.network[l]["law"],
+            )
 
             if self.network[l]["batchnorm"]:
                 self.gamma[l] = np.ones((1, self.network[l]["nb_neurons"]))
