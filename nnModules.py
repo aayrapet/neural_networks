@@ -79,7 +79,7 @@ class NN_Modules:
             # return np.random.uniform(-a, a,size= shape)
             return torch.empty(shape,device=device).uniform_(-a, a)
 
-    def __xavier(self, fan_in, fan_out,shape, law):
+    def __xavier(self, fan_in, fan_out,shape, law,device):
         if law == "normal":
             # return np.random.normal(
             #     0, np.sqrt(2 / (fan_in + fan_out)),size= shape
@@ -93,7 +93,7 @@ class NN_Modules:
             # return np.random.uniform(-a, a, size=shape)
             return torch.empty(shape,device=device).uniform_(-a, a)
 
-    def __he(self, fan_in, fan_out,shape, law):
+    def __he(self, fan_in, fan_out,shape, law,device):
         if law == "normal":
             # return np.random.normal(0, np.sqrt(2 / fan_in), size=shape)
             std=(2 / fan_in)**0.5
@@ -103,7 +103,7 @@ class NN_Modules:
             # return np.random.uniform(-a, a, size=shape)
             return torch.empty(shape,device=device).uniform_(-a, a)
 
-    def __random(self, fan_in, fan_out,shape, law):
+    def __random(self, fan_in, fan_out,shape, law,device):
         if law == "normal":
             # return np.random.normal(loc=0, scale=1, size=shape)
             return torch.randn(shape,device=device)
@@ -416,14 +416,14 @@ class NN_Modules:
             return nb_mlp_layers,cnn_layers, result
 
 
-    def initialise_params_for_optim_algos(self,c,B,a,b):
-        vector = {key: torch.zeros_like(val) for key, val in c.items()}
-        for_B = {key: torch.zeros_like(val) for key, val in B.items()}
+    def initialise_params_for_optim_algos(self,c,B,a,b,device):
+        vector = {key: torch.zeros_like(val,device=device) for key, val in c.items()}
+        for_B = {key: torch.zeros_like(val,device=device) for key, val in B.items()}
         for_c = vector  # same shapes
         for_a = {}
         for_b = {}
-        for_a[0] = torch.zeros_like(a)
-        for_b[0] = torch.zeros_like(b)
+        for_a[0] = torch.zeros_like(a,device=device)
+        for_b[0] = torch.zeros_like(b,device=device)
 
         if self.optim != "vanilla SGD":
             self.v_B = for_B
