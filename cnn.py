@@ -1,6 +1,7 @@
 from layers import ConvLayer,MaxPoolLayer,Layer,FlatLayer
 from main import MLP_Classifier
 import numpy as np
+from sklearn.metrics import accuracy_score
 
 class CNN(MLP_Classifier):
     def __init__(self, nn_infra, alpha=0.01, thr=1e-5, max_iter=1000,batch_size=None,seed=123,verbose=True,nb_epochs_early_stopping=500):
@@ -46,11 +47,15 @@ class CNN(MLP_Classifier):
     def train(
         self,
         X,
+        Y,
+        X_test = None,
+        Y_test = None,
+        fct  = accuracy_score
 
 
     ) -> None:
 
-
+        # -------------INITIALISATION OF PARAMETERS CNN------------------
         self.kernels={}
         self.cvbiases={}
         self.CV={}
@@ -58,30 +63,54 @@ class CNN(MLP_Classifier):
         self.MP={}
         self.kernels_init()
 
-        result=self.forward_cnn(X)
-        return result
+        dummy_image=np.zeros((X.shape[0],X.shape[1],X.shape[2],1))#simulate image in order to get self.p for MLP 
+        dummy_result=self.forward_cnn(dummy_image)
 
+        self.type = "multi" if Y.shape[1] > 1 else "binary"
+        self.X, self.Y = X,Y
+        self.Yncol, self.N =  Y.shape[1], X.shape[3]
+        self.p=dummy_result.shape[1]
 
+        if self.batch_size is None:
+             self.batch_size = max(100, int(self.N / 1000))  # for example
 
-    #     self.type = "multi" if Y.shape[1] > 1 else "binary"
-    #     self.X, self.Y = X,Y
-    #     self.Yncol, self.N =  Y.shape[1], X.shape[0]
+        # -------------INITIALISATION OF PARAMETERS EXTENDED MLP------------------
+        # B is dict of weigths
+        # c is dict of biases
+        # gamma  is scale parameter in batchnormalistion (mlp here)
+        # beta is shift aprameter in batchnormalisaiton
+        self.B, self.c = {}, {}
+        self.gamma, self.beta = {}, {}
+        # initialise weights and biases
+        super().weight_init()
+        # Z is linear combination Z=XB=c
+        # H is non linearity applied to Z : u(Z), where u is activation fucntion
+        # M is binary mask used in dropout
+        # Zhat is standartised Z s.t. Zhat=(Z-mean(Z))/std(Z) at layer l
+        # mean is mean(Z)
+        # sigma is std(Z)
+        # BN is scaled and shifted Zhat s.t BN(Z) = gamma * Zhat+ beta at layer l
+        self.Z, self.H, self.M = {}, {}, {}
+        self.Zhat = {}
+        self.mean = {}
+        self.sigma2 = {}
+        self.BN = {}
+        # grad_B is gradient of weight matrix at layer l
+        # grad_c is gradient of bias vector at layer l
+        # E is intermediate matrix for layer l (see neural_networks.pdf)
+        # V is intermediate matrix in case of batchnorm for layer l (see pdf)
+        self.E, self.V, self.grad_B, self.grad_c = {}, {}, {}, {}
+        self.grad_gamma, self.grad_beta = {}, {}
+        # for EMA with mean and sigma2, the final running statistics will be used for inference
+        self.mean_running, self.sigma2_running = {}, {}
+        # initialise parameters for EMA for some optimisers
+        super().initialise_params_for_optim_algos(self.c,self.B,self.a,self.b)
+        super().initialise_params_ema_batchnorm()
 
-    #     self.p=???
-
-
-    #     if self.batch_size is None:
-    #         self.batch_size = max(100, int(self.N / 1000))  # for example
-
-    #     # -------------INITIALISATION OF PARAMETERS MLP------------------
-    #     # B is dict of weigths
-    #     # c is dict of biases
-    #     # gamma  is scale parameter in batchnormalistion
-    #     # beta is shift aprameter in batchnormalisaiton
-    #     self.B, self.c = {}, {}
-    #     self.gamma, self.beta = {}, {}
-    #     # initialise weights and biases
-    #     super().weight_init()
+        # ----------------BACKPROPAGATION and SGD-------------------------------
+        # self.optim_algo(X_test, Y_test, fct)
+        # self.model_not_trained=False
+        # end of function, model is trained
 
 
 

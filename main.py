@@ -210,14 +210,16 @@ class MLP_Classifier(NN_Modules):
     def initialise_params_ema_batchnorm(self):
 
         self.mean_running = {
-            key: np.zeros_like(val)
-            for key, val in self.c.items()
-            if self.network[key]["batchnorm"]
+            l: np.zeros_like(self.c[l])
+            for l in range(self.nb_cnn_layers+1, self.nb_cnn_layers+self.nb_layers + 1)
+            # for key, val in self.c.items()
+            if self.network[l]["batchnorm"]
         }
         self.sigma2_running = {
-            key: np.ones_like(val)
-            for key, val in self.c.items()
-            if self.network[key]["batchnorm"]
+            l: np.ones_like(self.c[l])
+            for l in range(self.nb_cnn_layers+1, self.nb_cnn_layers+self.nb_layers + 1)
+            # for key, val in self.c.items()
+            if self.network[l]["batchnorm"]
         }
 
 
@@ -344,10 +346,10 @@ class MLP_Classifier(NN_Modules):
         self,
     ):
         np.random.seed(self.seed)
-        for l in range(1, self.nb_layers + 1):
+        for l in range(self.nb_cnn_layers+1, self.nb_cnn_layers+self.nb_layers + 1):
 
         
-            fan_in=self.p if l==1 else self.network[l - 1]["nb_neurons"]
+            fan_in=self.p if l==self.nb_cnn_layers+1 else self.network[l - 1]["nb_neurons"]
           
             self.B[l] = super().generate_weights(
                 fan_in=fan_in,
@@ -373,8 +375,8 @@ class MLP_Classifier(NN_Modules):
 
     def forward_pass(self, X, Y, train_or_test):
 
-        for l in range(1, self.nb_layers + 1):
-            if l == 1:
+        for l in range(self.nb_cnn_layers+1, self.nb_cnn_layers+self.nb_layers + 1):
+            if l == self.nb_cnn_layers+1:
                 self.Z[l] = X @ self.B[l] + self.c[l]
             else:
                 self.Z[l] = self.H[l - 1] @ self.B[l] + self.c[l]
@@ -416,7 +418,7 @@ class MLP_Classifier(NN_Modules):
 
     def update_gradients(self, t, alphat):
 
-        for l in range(self.nb_layers, 0, -1):
+        for l in range(self.nb_cnn_layers+self.nb_layers, self.nb_cnn_layers, -1):
             self.B[l] = self.B[l] - alphat * super().optim_method(
                 self.grad_B[l], l, t, "v_B", "m_B"
             )
@@ -439,12 +441,12 @@ class MLP_Classifier(NN_Modules):
 
         vector_ones = np.ones((1, nb_observations_inside_batch))
 
-        for l in range(self.nb_layers, 0, -1):
+        for l in range(self.nb_cnn_layers+self.nb_layers, self.nb_cnn_layers, -1):
 
             # calculate interm results before parameter gradients
             # choice to have all calculations in one function to make more readable and less messy
             if self.network[l]["batchnorm"]:
-                if l == self.nb_layers:
+                if l == self.nb_cnn_layers+self.nb_layers:
                     V_l = (
                         self.delta
                         @ self.a.T
@@ -485,7 +487,7 @@ class MLP_Classifier(NN_Modules):
 
             else:
 
-                if l == self.nb_layers:
+                if l == self.nb_cnn_layers+self.nb_layers:
 
                     self.E[l] = (
                         self.delta
@@ -503,7 +505,7 @@ class MLP_Classifier(NN_Modules):
                 self.E[l] = self.E[l] * self.M[l] / self.network[l]["regul_param"]
 
             # total loss parameter gradients (sumed over i=1...N)----------
-            if l > 1:
+            if l > self.nb_cnn_layers+1:
                 self.grad_B[l] = self.H[l - 1].T @ self.E[l]
             else:
                 self.grad_B[l] = X.T @ self.E[l]
