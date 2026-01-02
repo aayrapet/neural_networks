@@ -2,7 +2,6 @@
 import difflib
 from layers import ConvLayer,MaxPoolLayer,Layer,FlatLayer
 import numpy as np 
-import torch
 from typing import  (
     Any,
     Callable,
@@ -68,51 +67,50 @@ class NN_Modules:
         self.REGUL_METHODS: Dict[str, None] = {"l2": None, "dropout": None}
         self.LAWS: Dict[str, None] = {"normal": None, "uniform": None}
 
-    def __lecun(self, fan_in, fan_out,shape, law,device):
+    def __lecun(self, fan_in, fan_out,shape, law):
 
         if law == "normal":
-            # return np.random.normal(0, np.sqrt(1 / fan_in),size= shape)
-            std= (1 / fan_in)**0.5
-            return std*torch.randn(shape,device=device)# randn is N(0,1)
+            return np.random.normal(0, np.sqrt(1 / fan_in),size= shape)
+            # std= (1 / fan_in)**0.5
+            # return std*torch.randn(shape,device=device)# randn is N(0,1)
         else:
             a = (3 / fan_in)**0.5
-            # return np.random.uniform(-a, a,size= shape)
-            return torch.empty(shape,device=device).uniform_(-a, a)
+            return np.random.uniform(-a, a,size= shape)
+            # return torch.empty(shape,device=device).uniform_(-a, a)
 
-    def __xavier(self, fan_in, fan_out,shape, law,device):
+    def __xavier(self, fan_in, fan_out,shape, law):
         if law == "normal":
-            # return np.random.normal(
-            #     0, np.sqrt(2 / (fan_in + fan_out)),size= shape
-            # )
-            std=(2 / (fan_in + fan_out))**0.5
-            return std*torch.randn(shape,device=device)
+            return np.random.normal(
+                0, np.sqrt(2 / (fan_in + fan_out)),size= shape
+            )
+            # std=(2 / (fan_in + fan_out))**0.5
+            # return std*torch.randn(shape,device=device)
 
 
         else:
             a = (6 / (fan_in + fan_out))**0.5
-            # return np.random.uniform(-a, a, size=shape)
-            return torch.empty(shape,device=device).uniform_(-a, a)
+            return np.random.uniform(-a, a, size=shape)
+            # return torch.empty(shape,device=device).uniform_(-a, a)
 
-    def __he(self, fan_in, fan_out,shape, law,device):
+    def __he(self, fan_in, fan_out,shape, law):
         if law == "normal":
-            # return np.random.normal(0, np.sqrt(2 / fan_in), size=shape)
-            std=(2 / fan_in)**0.5
-            return std * torch.randn(shape,device=device)
+            return np.random.normal(0, np.sqrt(2 / fan_in), size=shape)
+            # std=(2 / fan_in)**0.5
+            # return std * torch.randn(shape,device=device)
         else:
             a =(6 / fan_in)**0.5
-            # return np.random.uniform(-a, a, size=shape)
-            return torch.empty(shape,device=device).uniform_(-a, a)
+            return np.random.uniform(-a, a, size=shape)
+            # return torch.empty(shape,device=device).uniform_(-a, a)
 
-    def __random(self, fan_in, fan_out,shape, law,device):
+    def __random(self, fan_in, fan_out,shape, law):
         if law == "normal":
-            # return np.random.normal(loc=0, scale=1, size=shape)
-            return torch.randn(shape,device=device)
+            return np.random.normal(loc=0, scale=1, size=shape)
+            # return torch.randn(shape,device=device)
         elif law == "uniform":
-            # return np.random.uniform(low=-1, high=1, size=shape)
-            return torch.empty(shape,device=device).uniform_(-1,1)
+            return np.random.uniform(low=-1, high=1, size=shape)
+            # return torch.empty(shape,device=device).uniform_(-1,1)
 
     def u(self, x, type_activation):
-        # in future need to import function from another library so not to define inside MLP
         return self.ACTIV_FUNCTIONS[type_activation](x)
 
     def uʹ(self, x, type_activation):
@@ -120,77 +118,76 @@ class NN_Modules:
 
     def __sigmoid(self, x):
     
-        # return np.where(x >= 0, 1 / (1 + np.exp(-x)), np.exp(x) / (1 + np.exp(x)))
+        return np.where(x >= 0, 1 / (1 + np.exp(-x)), np.exp(x) / (1 + np.exp(x)))
 
-        return torch.where(x >= 0, 1 / (1 + torch.exp(-x)), torch.exp(x) / (1 + torch.exp(x)))
+        # return torch.where(x >= 0, 1 / (1 + torch.exp(-x)), torch.exp(x) / (1 + torch.exp(x)))
 
     def __sigmoidʹ(self, x):
-       
-        # return self.__sigmoid(x) * (1 - self.__sigmoid(x))
-
         s = self.__sigmoid(x)
         return s * (1 - s)
 
     def __relu(self, x):
      
-        # return np.where(x <= 0, 0, x)
+        return np.where(x <= 0, 0, x)
 
-        return torch.where(x <= 0, 0, x)
+        # return torch.where(x <= 0, 0, x)
 
     def __reluʹ(self, x):
        
-        # return np.where(x <= 0, 0, 1)
+        return np.where(x <= 0, 0, 1)
 
-        return torch.where(x <= 0,0,1)
+        # return torch.where(x <= 0,0,1)
 
     def __tanh(self, x):
       
-        # return np.tanh(x)
+        return np.tanh(x)
 
-        return torch.tanh(x)
+        # return torch.tanh(x)
 
     def __tanhʹ(self, x):
     
-        # return 1 - (np.tanh(x)) ** 2
+        return 1 - (np.tanh(x)) ** 2
 
-        return 1 - torch.tanh(x) ** 2
+        # return 1 - torch.tanh(x) ** 2
 
     def __softmax_output(self, x):
         # https://en.wikipedia.org/wiki/Softmax_function
        
-        x_shift = x - torch.max(x, dim=1, keepdim=True).values
-        ex = torch.exp(x_shift)
-        return ex / torch.sum(ex, dim=1, keepdim=True)
-        # x_shift = x - np.max(x, axis=1, keepdims=True)
-        # ex = np.exp(x_shift)
-        # return ex / np.sum(ex, axis=1, keepdims=True)
+        # x_shift = x - torch.max(x, dim=1, keepdim=True).values
+        # ex = torch.exp(x_shift)
+        # return ex / torch.sum(ex, dim=1, keepdim=True)
+        x_shift = x - np.max(x, axis=1, keepdims=True)
+        ex = np.exp(x_shift)
+        return ex / np.sum(ex, axis=1, keepdims=True)
 
     def __sigmoid_output(self, x):
         return self.__sigmoid(x)
     
     def cross_entropy_binary(self, Y, y_hat):
-        # eps = 1e-8
-        # p = np.clip(y_hat, eps, 1 - eps)
-        # return -np.mean(Y * np.log(p) + (1 - Y) * np.log(1 - p))
         eps = 1e-8
-        p = torch.clamp(y_hat, eps, 1 - eps)#num stability: for log(0)
-        return -torch.mean(Y * torch.log(p) + (1 - Y) * torch.log(1 - p))
+        p = np.clip(y_hat, eps, 1 - eps)
+        return -np.mean(Y * np.log(p) + (1 - Y) * np.log(1 - p))
+        # eps = 1e-8
+        # p = torch.clamp(y_hat, eps, 1 - eps)#num stability: for log(0)
+        # return -torch.mean(Y * torch.log(p) + (1 - Y) * torch.log(1 - p))
 
     def cross_entropy_multi(self, Y, y_hat):
-        # eps = 1e-8
-        # p = np.clip(y_hat, eps, 1 - eps)
-        # return -np.mean(np.sum(Y * np.log(p), axis=1))
         eps = 1e-8
-        p = torch.clamp(y_hat, eps, 1 - eps)
-        return -torch.mean(torch.sum(Y * torch.log(p), dim=1))
+        p = np.clip(y_hat, eps, 1 - eps)#we dont need log(0) or log(1)
+        return -np.mean(np.sum(Y * np.log(p), axis=1))
+        # eps = 1e-8
+        # p = torch.clamp(y_hat, eps, 1 - eps)
+        # return -torch.mean(torch.sum(Y * torch.log(p), dim=1))
 
-    def generate_weights(self, fan_in, fan_out,shape, init, law,device):
-        return self.INIT_FUNCTIONS[init](fan_in, fan_out,shape, law,device)
+    def generate_weights(self, fan_in, fan_out,shape, init, law):
+        return self.INIT_FUNCTIONS[init](fan_in, fan_out,shape, law)
     
     def __vanillaSGD(self, gradient, layer_index, t, *args):
+        #used in cnn and mlp
         return gradient
 
     def __momentum(self, gradient, layer_index, t, *args):
+        #used only in mlp, i did not have time to do it for cnn 
 
         this_attrib = getattr(self, args[0])  # supports only one (v)
 
@@ -200,6 +197,8 @@ class NN_Modules:
         return this_attrib[layer_index]
 
     def __adam(self, gradient, layer_index, t, *args):
+        #used only in mlp, i did not have time to do it for cnn 
+
 
         v_attr = getattr(self, args[0])
         m_attr = getattr(self, args[1])
@@ -215,6 +214,8 @@ class NN_Modules:
         return vhat / ((mhat)**0.5 + 1e-8)
 
     def __rmsprop(self, gradient, layer_index, t, *args):
+        #used only in mlp, i did not have time to do it for cnn 
+
 
         this_attrib = getattr(self, args[0])  # supports only one (v)
 
@@ -222,8 +223,6 @@ class NN_Modules:
         this_attrib[layer_index] = v
 
         return gradient / ((v)**0.5 + 1e-8)
-
-
 
     def suggest_alternative(self,target: str, keys_allowed, i: int) -> None:
         if target.lower() in keys_allowed:
@@ -291,7 +290,8 @@ class NN_Modules:
                     raise ValueError("flat layer can't be before cnn layer")
 
                 #check parameters 
-                if isinstance(layer,Layer) or isinstance(layer,ConvLayer):
+                if isinstance(layer,Layer):
+                    
                     self.check_init_params("batchnorm", layer.batchnorm, bool, f"{layer.__class__.__name__} [{i+1}]")
                 if isinstance(layer,Layer):
                     self.check_init_params("nb of neurons", layer.nb_neurons, int, f"Layer [{i+1}]")
@@ -299,7 +299,7 @@ class NN_Modules:
                 if isinstance(layer,Layer) or isinstance(layer,ConvLayer):
                     self.check_init_params("initialisation", layer.initial, str, f"{layer.__class__.__name__} [{i+1}]")
 
-                if isinstance(layer,Layer) or isinstance(layer,ConvLayer):
+                if isinstance(layer,Layer) :
                     if not isinstance(layer.regul, tuple) and layer.regul != None:
                         raise ValueError(
                             f"{layer.__class__.__name__} [{i+1}] : regul has to be tuple or None, but is {layer.regul.__class__.__name__}"
@@ -380,16 +380,16 @@ class NN_Modules:
                         "stride": layer.stride,
                         "padding": layer.padding,
                         "activ_fct": layer.activation_function,
-                        "regul": layer.regularisation,
-                        "regul_param": layer.parameter,
+                     
                         "init": layer.initial,
                         "law": layer.law,
-                        "batchnorm": layer.batchnorm,
+                       
                         "fct" : layer.function
                     }
                     cnn_layers_present=True
                     cnn_layers=cnn_layers+1
                 elif isinstance(layer,MaxPoolLayer):
+
 
                     result[i + 1] = {
                         "layer_type" : MaxPoolLayer,
@@ -416,15 +416,21 @@ class NN_Modules:
             return nb_mlp_layers,cnn_layers, result
 
 
-    def initialise_params_for_optim_algos(self,c,B,a,b,device):
-        vector = {key: torch.zeros_like(val,device=device) for key, val in c.items()}
-        for_B = {key: torch.zeros_like(val,device=device) for key, val in B.items()}
+    def initialise_params_for_optim_algos(self,c,B,a,b):
+        vector = {key: np.zeros_like(val) for key, val in c.items()}
+        for_B = {key: np.zeros_like(val) for key, val in B.items()}
         for_c = vector  # same shapes
         for_a = {}
         for_b = {}
-        for_a[0] = torch.zeros_like(a,device=device)
-        for_b[0] = torch.zeros_like(b,device=device)
-
+        for_a[0] = np.zeros_like(a)
+        for_b[0] = np.zeros_like(b)
+        # vector = {key: torch.zeros_like(val,device=device) for key, val in c.items()}
+        # for_B = {key: torch.zeros_like(val,device=device) for key, val in B.items()}
+        # for_c = vector  # same shapes
+        # for_a = {}
+        # for_b = {}
+        # for_a[0] = torch.zeros_like(a,device=device)
+        # for_b[0] = torch.zeros_like(b,device=device)
         if self.optim != "vanilla SGD":
             self.v_B = for_B
             self.v_c = for_c

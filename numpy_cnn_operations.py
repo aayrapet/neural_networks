@@ -22,7 +22,7 @@ def padding_f(x,padding,filter_f,stride):
     if padding: 
         H,W=x.shape[0],x.shape[1]
         p_top, p_bottom, p_left, p_right=calculate_optimal_padding(H,W,filter_f,stride)
-        print(p_top, p_bottom, p_left, p_right)
+        # print(p_top, p_bottom, p_left, p_right)
         if x.ndim==3:
             padding_width=((p_top,p_bottom),(p_left,p_right),(0,0))
         elif x.ndim==4:
@@ -32,12 +32,13 @@ def padding_f(x,padding,filter_f,stride):
     return x
 
 def convolution_one_image(x ,nb_filters,kernel,bias,padding=True):
+    #let image 3D : 1 image of size H*W *nb of channels (rgd)
 
     x=padding_f(x,padding,len(kernel),1)#in pooling stride is 1
 
     #invert kernel to do convolution 
     kernel=kernel[::-1,::-1,:,:]
-    rk=kernel.reshape(len(kernel)*len(kernel),kernel.shape[2],nb_filters)
+    rk=kernel.reshape(kernel.shape[0]*kernel.shape[1],kernel.shape[2],kernel.shape[3])
     sw=sliding_window_view(x,(len(kernel),len(kernel)),axis=(0,1))
     rsw=sw.reshape(sw.shape[0],sw.shape[1],sw.shape[2],-1)
     #convolution image*filter 
@@ -46,22 +47,28 @@ def convolution_one_image(x ,nb_filters,kernel,bias,padding=True):
     return sumed_over_chanels+bias
 
 
-def convolution_multi_images(x ,nb_filters,kernel,bias,padding=True):
+def convolution_multi_images(x ,kernel,bias,padding=True):
+    #let image 4D : N images of size H*W *nb of channels (rgd)
 
 
+    #apply padding (or not) to input image (tensor  4D)
     x=padding_f(x,padding,len(kernel),1)#in pooling stride is 1
 
     #invert kernel to do convolution 
     kernel=kernel[::-1,::-1,:,:]
-    rk=kernel.reshape(len(kernel)*len(kernel),kernel.shape[2],nb_filters)
+
+    #need to reshape kernel matrix (H x W size) into just 1D vector to allow vector multiplication
+    rk=kernel.reshape(kernel.shape[0]*kernel.shape[1],kernel.shape[2],kernel.shape[3])#kernel is symetric (H=W)
+
+    #this is the core of convolution : instead of brute force heavy for loops (as in neural_networks.pdf)-> we use cpp function
     sw=sliding_window_view(x,(len(kernel),len(kernel)),axis=(0,1))
     rsw=sw.reshape(sw.shape[0],sw.shape[1],sw.shape[2],sw.shape[3],-1)
     #convolution image*filter 
     out=np.einsum('ijkvl,lkz->ijzvk',rsw,rk)
-    sumed_over_chanels=np.sum(out,axis=4)
-    return sumed_over_chanels+bias.reshape(1,1,len(bias),1)
+    sumed_over_chanels=np.sum(out,axis=4)#we need to sum over channels 
+    return sumed_over_chanels+bias.reshape(1,1,len(bias),1)#add bias
 
-def conv3D( x: np.ndarray ,nb_filters,kernel,bias,padding=True):
+def conv3D( x: np.ndarray ,kernel,bias,padding=True):
 
     """
     let x be one image or collection of images:
@@ -69,6 +76,9 @@ def conv3D( x: np.ndarray ,nb_filters,kernel,bias,padding=True):
 
     -> if one image then the size of x is (H, W, 3) (height,width,3 color chanels)
     -> if many images then the size of x is  (H, W, 3,nunmber of images )
+
+
+    for convolution stride is always 1 even if specified 
 
     """
     conv_dim={
@@ -86,7 +96,7 @@ def conv3D( x: np.ndarray ,nb_filters,kernel,bias,padding=True):
     # if x.shape[2]!=3:
     #     raise ValueError(f"image has to be rgb with 3 color  channels, you have {x.shape[2]} color channels ")
     
-    return conv_dim[x.ndim](x,nb_filters,kernel,bias,padding)
+    return conv_dim[x.ndim](x,kernel,bias,padding)
     
 def MaxPooling3D(x,filter_f,stride=1,padding=True):
 
@@ -102,3 +112,6 @@ def MaxPooling3D(x,filter_f,stride=1,padding=True):
         return v[::stride, ::stride].max(axis=(4,5))#2 and 3 are dims of f*f matrices 
     #note that 2 last dims are our dims 
  
+def flatten_reshape3D(x):
+    x = np.transpose(x, (3, 0, 1, 2))   # (N,H,W,C)
+    return x.reshape(x.shape[0], -1)

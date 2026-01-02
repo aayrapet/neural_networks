@@ -370,6 +370,7 @@ class MLP_Classifier(NN_Modules):
         self.b = np.zeros((1, self.Yncol))
 
 
+
     def forward_pass(self, X, Y, train_or_test):
 
         for l in range(1, self.nb_layers + 1):

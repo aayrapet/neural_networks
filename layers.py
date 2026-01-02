@@ -1,4 +1,4 @@
-from torch_cnn_operations import convolution_torch, maxpooling_torch,flatten_torch
+from numpy_cnn_operations import conv3D, MaxPooling3D,flatten_reshape3D
 
 class Layer:
     def __init__(
@@ -11,35 +11,37 @@ class Layer:
         law: str = "normal",
     ) -> None:
 
+        self.batchnorm=batchnorm
         self.nb_neurons = nb_neurons
         self.activation_function = activation_function
         self.initial = initial
         self.law = law
-        self.regul = regul
-        self.batchnorm = batchnorm
+        self.regul=regul
+        self.regularisation=None
+        self.parameter=None
+ 
 
 class ConvLayer:
-    def __init__(self,in_channels,output_channels,kernel_size,stride,padding,activation_function,regul,initial="lecun",law="normal",batchnorm=False):
+    def __init__(self,in_channels,output_channels,kernel_size,stride,padding,activation_function,initial="lecun",law="normal"):
 
         self.in_channels=in_channels
         self.output_channels=output_channels
         self.kernel_size=kernel_size
         self.stride=stride
         self.padding=padding
-        self.batchnorm=batchnorm
+
         self.initial=initial
         self.activation_function = activation_function
         self.law = law
-        self.regul = regul
-        self.function=convolution_torch
+        self.function=conv3D
 
 class MaxPoolLayer:
     def __init__(self,kernel_size,stride,padding):
         self.kernel_size=kernel_size
         self.stride=stride
         self.padding=padding
-        self.function=maxpooling_torch    
+        self.function=MaxPooling3D    
 
 class FlatLayer:
     def __init__(self):
-        self.function=flatten_torch
+        self.function=flatten_reshape3D
