@@ -410,7 +410,7 @@ class MLP_Classifier(NN_Modules):
                     self.H[l] = self.H[l] * self.M[l] / self.network[l]["regul_param"]
 
         self.y_hat = self.OUTPUT_FUNCTION[self.type](
-            self.H[self.nb_layers] @ self.a + self.b
+            self.H[self.nb_cnn_layers+self.nb_layers] @ self.a + self.b
         )
         if train_or_test == "test":
             return self.y_hat
@@ -517,7 +517,7 @@ class MLP_Classifier(NN_Modules):
 
             self.grad_c[l] = vector_ones @ self.E[l]
         self.grad_a = (
-            self.H[self.nb_layers].T @ self.delta * (1 / nb_observations_inside_batch)
+            self.H[self.nb_cnn_layers+self.nb_layers].T @ self.delta * (1 / nb_observations_inside_batch)
         )
         self.grad_b = vector_ones @ self.delta * (1 / nb_observations_inside_batch)
 

@@ -20,6 +20,7 @@ class Layer:
         self.regularisation=None
         self.parameter=None
  
+ 
 
 class ConvLayer:
     def __init__(self,in_channels,output_channels,kernel_size,stride,padding,activation_function,initial="lecun",law="normal"):

@@ -2,6 +2,9 @@ from layers import ConvLayer,MaxPoolLayer,Layer,FlatLayer
 from main import MLP_Classifier
 import numpy as np
 from sklearn.metrics import accuracy_score
+from numpy_cnn_operations import *
+
+
 
 class CNN(MLP_Classifier):
     def __init__(self, nn_infra, alpha=0.01, thr=1e-5, max_iter=1000,batch_size=None,seed=123,verbose=True,nb_epochs_early_stopping=500):
@@ -20,29 +23,112 @@ class CNN(MLP_Classifier):
             nb_epochs_early_stopping=nb_epochs_early_stopping
         )
 
-    def forward_cnn(self,X):
+    def forward_cnn(self,X,train_or_test):
 
         input_matrix=X
-        print(input_matrix.shape)
+        
+        if train_or_test=="train":
+                        print(0,"original image  shape:",input_matrix.shape)
         #let CV be a dictionnary with conv, MP dict with maxpool, ACV be a dict with convolutions on which activ fct was applied
         #let kernels,cvbiases be dict for conv
         #let RESCNN be result of cnn
+        last=0
         for l in range(1,self.nb_cnn_layers+1):
 
             if self.network[l]["layer_type"].__name__=="ConvLayer":
-                    self.CV[l]=self.network[l]["fct"](input_matrix,kernel=self.kernels[l] ,bias=self.cvbiases[l],padding=self.network[l]["padding"])
+
+                    #pading
+                    input_matrix,pad_tuple=padding_f(input_matrix,padding=self.network[l]["padding"],filter_f=self.network[l]["kernel_size"],stride=self.network[l]["stride"])
+
+                    if train_or_test=="train":
+                        self.network[l]["pad_tuple"]=pad_tuple
+                        self.PadX[l]=input_matrix
+
+                    self.CV[l]=conv3D(input_matrix,kernel=self.kernels[l] ,bias=self.cvbiases[l])
                     self.ACV[l]=self.ACTIV_FUNCTIONS[self.network[l]["activ_fct"]](self.CV[l])
                     input_matrix=self.ACV[l]
-                    print(input_matrix.shape)
+                    if train_or_test=="train":
+                        print(l,"conv layer shape:",input_matrix.shape)
+
+
             elif self.network[l]["layer_type"].__name__=="MaxPoolLayer":
-                self.MP[l]=self.network[l]["fct"](input_matrix,  filter_f= self.network[l]["kernel_size"],stride=self.network[l]["stride"], padding=self.network[l]["padding"])
-                input_matrix=self.MP[l]
-                print(input_matrix.shape)
+
+                self.network[l]["shape_input_matrix"]=input_matrix.shape
+                
+                if input_matrix.shape[0]!=1:
+                    mask,out=MaxPooling3D(input_matrix,  filter_f= self.network[l]["kernel_size"],stride=self.network[l]["stride"])
+
+
+                    if train_or_test=="train":
+                        
+                        self.maskMP[l]=mask
+                    self.MP[l]=out
+                    input_matrix=self.MP[l]
+                    last=l
+                else:
+                    #valid pooling has to have valid sizes first
+                    if train_or_test=="train":
+                        
+                        self.maskMP[l]=self.maskMP[last]
+                    self.MP[l]=input_matrix
+                    
+                if train_or_test=="train":
+                        print(l,"maxpool layer shape:",input_matrix.shape)
+                
 
             elif self.network[l]["layer_type"].__name__=="FlatLayer":
-                RESCNN=self.network[l]["fct"](input_matrix)
-                print(input_matrix.shape)
+                original_shape,RESCNN=flatten_reshape3D(input_matrix)
+                
+                if train_or_test=="train":
+                        print(l,"flatten layer shape:",input_matrix.shape)
+                        self.network[l]["original_shape"]=original_shape
+
         return RESCNN
+
+    def predict(self,X):
+        #ATTENTION IMAGE HAS TO BE OF SIZE  (H,W,C,N)!!!!!!!!(height,wiidth,nb of channels(rgb), nb of images, nothing else!!!)
+        result_cnn=self.forward_cnn(X,"test")
+        predicted = super().forward_pass(result_cnn,None,"test")
+        return super().predict_here_and_now(predicted)
+
+    def calculate_gradients_backprop_cnn(self,nb_observations_inside_batch):
+
+            
+
+            #before calculating gradients cnnn we calculate gradients mlp
+            #we calculate dL/dX for cnn where X is input matrix of MLP (reshaped result of cnn)
+            #dL/dX=E[1]@B[1].T 
+            #but since for cnn we start at 1 and end at nb_cnn_layers+nb_layers:
+            #becomes dL/dX=E[nb_cnn_layers+1]@B[nb_cnn_layers+1].T =: dL_dX
+            dL_dX=self.E[self.nb_cnn_layers+1]@self.B[nb_cnn_layers+1].T
+
+            grad=None
+            grad_wrt_ACV=None
+            for l in range(self.nb_cnn_layers, 0, -1):
+                
+                #i suppose that at l==self.nb_cnn_layers we have flattenlayer (logic,but i admit that future error validation can be useful )
+                if l==self.nb_cnn_layers:
+                    grad=flatten_backward(dL_dX, self.network[l]["original_shape"])
+                elif self.network[l]["layer_type"].__name__=="MaxPoolLayer":
+
+
+                    grad_wrt_ACV=maxpool_backward_general(grad,self.maskMP[l],self.network[l]["shape_input_matrix"],self.network[l]["kernel_size"],self.network[l]["stride"])
+
+                elif self.network[l]["layer_type"].__name__=="ConvLayer":
+                    grad_wrt_CV=grad_wrt_ACV*super().uʹ(self.CV[l], self.network[l]["activ_fct"])
+                    #let dCV_dkernel,dCV_dbias be gradients dicts
+                    #stride is always 1 for conv in my setting 
+                    
+                    dCV_dkernel[l]=conv_weight_grad(self.PadX[l],grad_wrt_CV,self.network[l]["kernel_size"],1)
+                    dCV_dbias[l]=conv_bias_grad(grad_wrt_CV)
+
+                    #gradient of convolution result wrt input matrix X
+
+                    dCV_dX=conv_input_grad(grad_wrt_CV,self.kernels[l],self.network[l]["pad_tuple"])
+                    
+                    grad=dCV_dX
+
+
 
     def train(
         self,
@@ -62,9 +148,18 @@ class CNN(MLP_Classifier):
         self.ACV={}
         self.MP={}
         self.kernels_init()
+        #save padded matrices
+        self.PadX={}
+        #indeces of max values within windows for maxpoll layer
+        self.maskMP={}
+
+        #store gradients wrt to kernels and biases in convolution layers 
+        dCV_dkernel={}
+        dCV_dbias={}
 
         dummy_image=np.zeros((X.shape[0],X.shape[1],X.shape[2],1))#simulate image in order to get self.p for MLP 
-        dummy_result=self.forward_cnn(dummy_image)
+        dummy_result=self.forward_cnn(dummy_image,"test")
+        print("dummy res shape",dummy_result.shape)
 
         self.type = "multi" if Y.shape[1] > 1 else "binary"
         self.X, self.Y = X,Y
