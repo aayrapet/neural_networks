@@ -32,12 +32,12 @@ class CNN(MLP_Classifier):
             nb_epochs_early_stopping=nb_epochs_early_stopping
         )
 
-    def forward_cnn(self,X,train_or_test):
+    def forward_cnn(self,X,train_or_test,ft=False):
 
         input_matrix=X
         
-        # if train_or_test=="train":
-        #                 print(0,"original image  shape:",input_matrix.shape)
+        if ft:
+            print(0,"original image  shape:",input_matrix.shape)
         #let CV be a dictionnary with conv, MP dict with maxpool, ACV be a dict with convolutions on which activ fct was applied
         #let kernels,cvbiases be dict for conv
         #let RESCNN be result of cnn
@@ -56,8 +56,8 @@ class CNN(MLP_Classifier):
                     self.CV[l]=conv3D(input_matrix,kernel=self.kernels[l] ,bias=self.cvbiases[l])
                     self.ACV[l]=self.ACTIV_FUNCTIONS[self.network[l]["activ_fct"]](self.CV[l])
                     input_matrix=self.ACV[l]
-                    # if train_or_test=="train":
-                    #     print(l,"conv layer shape:",input_matrix.shape)
+                    if ft:
+                         print(l,"conv layer shape:",input_matrix.shape)
 
 
             elif self.network[l]["layer_type"].__name__=="MaxPoolLayer":
@@ -80,16 +80,16 @@ class CNN(MLP_Classifier):
                     #valid pooling has to have valid sizes first
                     raise RuntimeError("Invalid CNN design: maxpool on 1x1 tensor reached.")
                     
-                # if train_or_test=="train":
-                #         print(l,"maxpool layer shape:",input_matrix.shape)
+                if ft:
+                        print(l,"maxpool layer shape:",input_matrix.shape)
                 
 
             elif self.network[l]["layer_type"].__name__=="FlatLayer":
                 original_shape,RESCNN=flatten_reshape3D(input_matrix)
                 
-                if train_or_test=="train":
-                        # print(l,"flatten layer shape:",input_matrix.shape)
-                        self.network[l]["original_shape"]=original_shape
+                if ft:
+                        print(l,"flatten layer shape:",input_matrix.shape)
+                self.network[l]["original_shape"]=original_shape
 
         return RESCNN
 
@@ -109,6 +109,7 @@ class CNN(MLP_Classifier):
             #but since for cnn we start at 1 and end at nb_cnn_layers+nb_layers:
             #becomes dL/dX=E[nb_cnn_layers+1]@B[nb_cnn_layers+1].T =: dL_dX
             dL_dX=self.E[self.nb_cnn_layers+1]@self.B[self.nb_cnn_layers+1].T
+            print(dL_dX.shape)
 
             grad=None
             grad_wrt_ACV=None
@@ -145,7 +146,7 @@ class CNN(MLP_Classifier):
         Y,
         X_test = None,
         Y_test = None,
-        fct  = accuracy_score
+        fct  : Callable= accuracy_score
 
 
     ) -> None:
@@ -167,8 +168,10 @@ class CNN(MLP_Classifier):
         self.dCV_dbias={}
 
         dummy_image=np.zeros((X.shape[0],X.shape[1],X.shape[2],1))#simulate image in order to get self.p for MLP 
-        dummy_result=self.forward_cnn(dummy_image,"test")
+        print(dummy_image.shape)
+        dummy_result=self.forward_cnn(dummy_image,"test",ft=True)
         print("dummy res shape",dummy_result.shape)
+        print("the last dim is 1 as it is dummy, other shapes are kept as is ")
 
         self.type = "multi" if Y.shape[1] > 1 else "binary"
         self.X, self.Y = X,Y
@@ -211,10 +214,10 @@ class CNN(MLP_Classifier):
         super().initialise_params_for_optim_algos(self.c,self.B,self.a,self.b)
         super().initialise_params_ema_batchnorm()
 
-        ----------------BACKPROPAGATION and SGD-------------------------------
+        #----------------BACKPROPAGATION and SGD-------------------------------
         self.optim_algo(X_test, Y_test, fct)
         self.model_not_trained=False
-        end of function, model is trained
+        
 
 
 
@@ -258,7 +261,7 @@ class CNN(MLP_Classifier):
         self,
         X_test = None,
         Y_test = None,
-        fct: Callable,
+        fct: Callable = None,
     ) -> None:
 
         alphaT = self.alpha * 0.01  # alphaT is 1 prct of alpha0
@@ -324,7 +327,7 @@ class CNN(MLP_Classifier):
 
             # see how metrics evaluate over time (train set and test set (if defined))
             if self.verbose:
-                if epoch % 50 == 0:
+                if epoch % 1 == 0:
 
                     print(
                         "-------------------------------------------------------------------------"
@@ -348,7 +351,7 @@ class CNN(MLP_Classifier):
                     counter_early_stop = counter_early_stop + 1
 
                 if self.verbose:
-                    if epoch % 50 == 0:
+                    if epoch % 1 == 0:
 
                         y_predicted_test = self.predict_here_and_now(self.y_hat)
                         print(
