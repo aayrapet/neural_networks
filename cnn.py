@@ -3,7 +3,16 @@ from main import MLP_Classifier
 import numpy as np
 from sklearn.metrics import accuracy_score
 from numpy_cnn_operations import *
-
+from typing import  (
+    Any,
+    Callable,
+    Dict,
+    List,
+    KeysView,
+    Optional,
+    Tuple,
+    Union,
+)
 
 
 class CNN(MLP_Classifier):
@@ -69,10 +78,7 @@ class CNN(MLP_Classifier):
                     #ATTENTION I DONT HANDLE THIS SCENARIO IN BACKWARD SO NEVER NEVER reach the situation when maxpooling is used on matrices of size 1*1
                     #so u can stop earlier or at that exact moment and instantly go to flatter layer
                     #valid pooling has to have valid sizes first
-                    if train_or_test=="train":
-                        
-                        self.maskMP[l]=self.maskMP[last]
-                    self.MP[l]=input_matrix
+                    raise RuntimeError("Invalid CNN design: maxpool on 1x1 tensor reached.")
                     
                 # if train_or_test=="train":
                 #         print(l,"maxpool layer shape:",input_matrix.shape)
@@ -205,17 +211,17 @@ class CNN(MLP_Classifier):
         super().initialise_params_for_optim_algos(self.c,self.B,self.a,self.b)
         super().initialise_params_ema_batchnorm()
 
-        # ----------------BACKPROPAGATION and SGD-------------------------------
-        # self.optim_algo(X_test, Y_test, fct)
-        # self.model_not_trained=False
-        # end of function, model is trained
+        ----------------BACKPROPAGATION and SGD-------------------------------
+        self.optim_algo(X_test, Y_test, fct)
+        self.model_not_trained=False
+        end of function, model is trained
 
 
 
     def kernels_init(
         self,
     ):
-
+        np.random.seed(self.seed)
         for l in range(1, self.nb_cnn_layers + 1):
 
             if self.network[l]["layer_type"].__name__=="ConvLayer":
@@ -231,7 +237,14 @@ class CNN(MLP_Classifier):
                     )
                 self.cvbiases[l] = np.zeros((self.network[l]["output_channels"]))
      
+    def update_gradients_cnn(self, t, alphat):
 
+        for l in range(1, self.nb_cnn_layers+1):
+
+            if self.network[l]["layer_type"].__name__=="ConvLayer":
+
+                self.kernels[l] = self.kernels[l] - alphat * self.dCV_dkernel[l]
+                self.cvbiases[l] = self.cvbiases[l] - alphat * self.dCV_dbias[l]
 
     def test(self,X,Y):
 
@@ -239,6 +252,117 @@ class CNN(MLP_Classifier):
         super().forward_pass(RESCNN,Y,"train")
         super().calculate_gradients_backprop(RESCNN, RESCNN.shape[0])
         self.calculate_gradients_backprop_cnn()
+
+    
+    def optim_algo(
+        self,
+        X_test = None,
+        Y_test = None,
+        fct: Callable,
+    ) -> None:
+
+        alphaT = self.alpha * 0.01  # alphaT is 1 prct of alpha0
+        T_for_alpha = 300  # for example
+        k = 1
+        
+
+        loss_old, curr_min__loss_val = float("inf"), float("inf")
+        counter_early_stop = 1
+
+        oldalpha = None
+        t = 1  # t is used in adam optim
+        for epoch in range(self.max_iter):
+            # SGD with random permutation at each epoch
+            indices = np.random.permutation(self.N)
+            X = self.X[:,:,:,indices]
+            Y = self.Y[indices]
+            start_index = 0
+
+            while start_index < self.N:
+
+                end_index = min(start_index + self.batch_size, self.N)
+
+                X_batch = X[:,:,:,start_index:end_index]
+                Y_batch = Y[start_index:end_index]
+
+                # start with new minibatch : forward-> backward->update weights->forward(to calculate loss)
+                
+                RESCNN=self.forward_cnn(X_batch,"train")
+                super().forward_pass(RESCNN, Y_batch, "train")
+                super().calculate_gradients_backprop(RESCNN, end_index - start_index)
+                self.calculate_gradients_backprop_cnn()
+
+
+                if k < T_for_alpha:
+                    alphat = (1 - (k / T_for_alpha)) * self.alpha + (
+                        k / T_for_alpha
+                    ) * alphaT
+                    oldalpha = alphat
+                else:
+                    alphat = oldalpha
+
+                super().update_gradients(t, alphat)
+                self.update_gradients_cnn(None,alphat)
+
+                start_index = end_index
+                t = t + 1
+
+            # loss comparison new vs old (on training set)
+            #i can do also by minibatches and then average losses but i dont have time 
+            k = k + 1
+            RESCNN=self.forward_cnn(self.X,"test")#here i do on all dataset(not efficient)
+            super().forward_pass(RESCNN, self.Y, "train")#not clean but it works only with this 
+            loss_new = super().loss(self.Y,self.y_hat)
+
+            if np.abs(loss_new - loss_old) < self.thr:
+                if self.verbose:
+                    print(
+                        f"Model terminated successfully, Converged at {epoch+1} epoch, for a given alpha :  {self.alpha} and given threshold : {self.thr} "
+                    )
+                return
+            loss_old = loss_new
+
+            # see how metrics evaluate over time (train set and test set (if defined))
+            if self.verbose:
+                if epoch % 50 == 0:
+
+                    print(
+                        "-------------------------------------------------------------------------"
+                    )
+                    y_predicted_train = super().predict_here_and_now(self.y_hat)
+                    print(
+                        f"iteration {epoch} : TRAIN {fct.__name__}  : {fct(y_predicted_train,self.Y)}, loss : {loss_new}"
+                    )
+
+            if X_test is not None:
+                #do same but also on xtest
+
+                RESCNN=self.forward_cnn(X_test,"test")#here i do on all dataset(not efficient)
+                super().forward_pass(RESCNN, Y_test, "train")#not clean but it works only with this                 
+                test_loss = super().loss(Y_test,self.y_hat)
+
+                if test_loss < curr_min__loss_val:
+                    curr_min__loss_val = test_loss
+                    counter_early_stop = 1
+                else:
+                    counter_early_stop = counter_early_stop + 1
+
+                if self.verbose:
+                    if epoch % 50 == 0:
+
+                        y_predicted_test = self.predict_here_and_now(self.y_hat)
+                        print(
+                            f"iteration {epoch} : TEST {fct.__name__}  : {fct(y_predicted_test,Y_test)}, loss : {test_loss}"
+                        )
+
+                if counter_early_stop >= self.nb_epochs_early_stopping:
+                    print(f"early stopping at epoch {epoch}")
+                    return
+
+        print(
+            f"Model terminated successfully, Did not Converge at {epoch+1} epoch, for a given alpha :  {self.alpha} and given threshold : {self.thr} "
+        )
+
 
 
 
