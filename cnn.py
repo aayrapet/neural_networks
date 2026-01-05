@@ -66,6 +66,8 @@ class CNN(MLP_Classifier):
                     input_matrix=self.MP[l]
                     last=l
                 else:
+                    #ATTENTION I DONT HANDLE THIS SCENARIO IN BACKWARD SO NEVER NEVER reach the situation when maxpooling is used on matrices of size 1*1
+                    #so u can stop earlier or at that exact moment and instantly go to flatter layer
                     #valid pooling has to have valid sizes first
                     if train_or_test=="train":
                         
@@ -105,6 +107,7 @@ class CNN(MLP_Classifier):
             grad=None
             grad_wrt_ACV=None
             for l in range(self.nb_cnn_layers, 0, -1):
+                print(l,self.network[l]["layer_type"].__name__)
                 
                 #i suppose that at l==self.nb_cnn_layers we have flattenlayer (logic,but i admit that future error validation can be useful )
                 if l==self.nb_cnn_layers:
@@ -233,7 +236,7 @@ class CNN(MLP_Classifier):
     def test(self,X,Y):
 
         RESCNN=self.forward_cnn(X,"train")
-        super().forward_pass(RESCNN,y,"train")
+        super().forward_pass(RESCNN,Y,"train")
         super().calculate_gradients_backprop(RESCNN, RESCNN.shape[0])
         self.calculate_gradients_backprop_cnn()
 
