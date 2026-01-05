@@ -27,8 +27,8 @@ class CNN(MLP_Classifier):
 
         input_matrix=X
         
-        if train_or_test=="train":
-                        print(0,"original image  shape:",input_matrix.shape)
+        # if train_or_test=="train":
+        #                 print(0,"original image  shape:",input_matrix.shape)
         #let CV be a dictionnary with conv, MP dict with maxpool, ACV be a dict with convolutions on which activ fct was applied
         #let kernels,cvbiases be dict for conv
         #let RESCNN be result of cnn
@@ -47,8 +47,8 @@ class CNN(MLP_Classifier):
                     self.CV[l]=conv3D(input_matrix,kernel=self.kernels[l] ,bias=self.cvbiases[l])
                     self.ACV[l]=self.ACTIV_FUNCTIONS[self.network[l]["activ_fct"]](self.CV[l])
                     input_matrix=self.ACV[l]
-                    if train_or_test=="train":
-                        print(l,"conv layer shape:",input_matrix.shape)
+                    # if train_or_test=="train":
+                    #     print(l,"conv layer shape:",input_matrix.shape)
 
 
             elif self.network[l]["layer_type"].__name__=="MaxPoolLayer":
@@ -72,15 +72,15 @@ class CNN(MLP_Classifier):
                         self.maskMP[l]=self.maskMP[last]
                     self.MP[l]=input_matrix
                     
-                if train_or_test=="train":
-                        print(l,"maxpool layer shape:",input_matrix.shape)
+                # if train_or_test=="train":
+                #         print(l,"maxpool layer shape:",input_matrix.shape)
                 
 
             elif self.network[l]["layer_type"].__name__=="FlatLayer":
                 original_shape,RESCNN=flatten_reshape3D(input_matrix)
                 
                 if train_or_test=="train":
-                        print(l,"flatten layer shape:",input_matrix.shape)
+                        # print(l,"flatten layer shape:",input_matrix.shape)
                         self.network[l]["original_shape"]=original_shape
 
         return RESCNN
@@ -91,7 +91,7 @@ class CNN(MLP_Classifier):
         predicted = super().forward_pass(result_cnn,None,"test")
         return super().predict_here_and_now(predicted)
 
-    def calculate_gradients_backprop_cnn(self,nb_observations_inside_batch):
+    def calculate_gradients_backprop_cnn(self):
 
             
 
@@ -100,7 +100,7 @@ class CNN(MLP_Classifier):
             #dL/dX=E[1]@B[1].T 
             #but since for cnn we start at 1 and end at nb_cnn_layers+nb_layers:
             #becomes dL/dX=E[nb_cnn_layers+1]@B[nb_cnn_layers+1].T =: dL_dX
-            dL_dX=self.E[self.nb_cnn_layers+1]@self.B[nb_cnn_layers+1].T
+            dL_dX=self.E[self.nb_cnn_layers+1]@self.B[self.nb_cnn_layers+1].T
 
             grad=None
             grad_wrt_ACV=None
@@ -119,8 +119,8 @@ class CNN(MLP_Classifier):
                     #let dCV_dkernel,dCV_dbias be gradients dicts
                     #stride is always 1 for conv in my setting 
                     
-                    dCV_dkernel[l]=conv_weight_grad(self.PadX[l],grad_wrt_CV,self.network[l]["kernel_size"],1)
-                    dCV_dbias[l]=conv_bias_grad(grad_wrt_CV)
+                    self.dCV_dkernel[l]=conv_weight_grad(self.PadX[l],grad_wrt_CV,self.network[l]["kernel_size"],1)
+                    self.dCV_dbias[l]=conv_bias_grad(grad_wrt_CV)
 
                     #gradient of convolution result wrt input matrix X
 
@@ -154,8 +154,8 @@ class CNN(MLP_Classifier):
         self.maskMP={}
 
         #store gradients wrt to kernels and biases in convolution layers 
-        dCV_dkernel={}
-        dCV_dbias={}
+        self.dCV_dkernel={}
+        self.dCV_dbias={}
 
         dummy_image=np.zeros((X.shape[0],X.shape[1],X.shape[2],1))#simulate image in order to get self.p for MLP 
         dummy_result=self.forward_cnn(dummy_image,"test")
@@ -230,6 +230,12 @@ class CNN(MLP_Classifier):
      
 
 
+    def test(self,X,Y):
+
+        RESCNN=self.forward_cnn(X,"train")
+        super().forward_pass(RESCNN,y,"train")
+        super().calculate_gradients_backprop(RESCNN, RESCNN.shape[0])
+        self.calculate_gradients_backprop_cnn()
 
 
 
