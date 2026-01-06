@@ -109,12 +109,12 @@ class CNN(MLP_Classifier):
             #but since for cnn we start at 1 and end at nb_cnn_layers+nb_layers:
             #becomes dL/dX=E[nb_cnn_layers+1]@B[nb_cnn_layers+1].T =: dL_dX
             dL_dX=self.E[self.nb_cnn_layers+1]@self.B[self.nb_cnn_layers+1].T
-            print(dL_dX.shape)
+     
 
             grad=None
             grad_wrt_ACV=None
             for l in range(self.nb_cnn_layers, 0, -1):
-                print(l,self.network[l]["layer_type"].__name__)
+                # print(l,self.network[l]["layer_type"].__name__)
                 
                 #i suppose that at l==self.nb_cnn_layers we have flattenlayer (logic,but i admit that future error validation can be useful )
                 if l==self.nb_cnn_layers:
@@ -275,6 +275,7 @@ class CNN(MLP_Classifier):
         oldalpha = None
         t = 1  # t is used in adam optim
         for epoch in range(self.max_iter):
+
             # SGD with random permutation at each epoch
             indices = np.random.permutation(self.N)
             X = self.X[:,:,:,indices]
@@ -327,7 +328,7 @@ class CNN(MLP_Classifier):
 
             # see how metrics evaluate over time (train set and test set (if defined))
             if self.verbose:
-                if epoch % 1 == 0:
+                if epoch % 5 == 0:
 
                     print(
                         "-------------------------------------------------------------------------"
@@ -351,7 +352,7 @@ class CNN(MLP_Classifier):
                     counter_early_stop = counter_early_stop + 1
 
                 if self.verbose:
-                    if epoch % 1 == 0:
+                    if epoch % 5 == 0:
 
                         y_predicted_test = self.predict_here_and_now(self.y_hat)
                         print(
