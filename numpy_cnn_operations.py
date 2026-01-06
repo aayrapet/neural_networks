@@ -5,7 +5,8 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 
 def calculate_optimal_padding(H, W, f, s):
-
+    #https://stanford.edu/~shervine/teaching/cs-230/cheatsheet-convolutional-neural-networks
+    #attenton, i do non symmetric padding 
     # ceil and floor strictly in this order to match convolutiono padding 
     # --- Height dimension ---
     p_top =  math.floor((s * math.ceil(H / s) - H + f - s) / 2) 
@@ -33,8 +34,10 @@ def padding_f(x,padding,filter_f,stride):
 
 def convolution_one_image(x ,nb_filters,kernel,bias,padding=True):
     #let image 3D : 1 image of size H*W *nb of channels (rgd)
+    #as exolained in neural_networks.pdf in a photo, i reshape kernels and do dot product between this vector and reshaped windows
+    #which is done by einsum 
 
-    x=padding_f(x,padding,len(kernel),1)#in pooling stride is 1
+    x=padding_f(x,padding,len(kernel),1)#in pooling stride is 1 (in my setting )
 
     #invert kernel to do convolution 
     kernel=kernel[::-1,::-1,:,:]
@@ -110,6 +113,7 @@ def maxpool_backward_general(dout, mask, x_shape, F, S):
     # derivative dL/dx up to next layer : (H, W, C, N)
     # mask : (H, W, C, N, F, F) we look at all f*f submatrices and store its max indexes as in :
     #https://www.educative.io/answers/how-to-backpropagate-through-max-pooling-layers
+    #if there are overlapping indexes then we sum them (stride<f)
 
     H, W, C, N = dout.shape
 
@@ -158,63 +162,60 @@ def conv_weight_grad(X, dZ, F, S):
     H, W, C_in, N = X.shape
     _, _, C_out, _ = dZ.shape
 
-    # 1) Extract all input windows used in forward
+    #Extract all input windows used in forward
     # shape -> (H, W, C_in, N, F, F)
-    windows = sliding_window_view(X, (F, F), axis=(0,1))
-    windows = windows[::S, ::S]  #stride           
+    windows =sliding_window_view(X, (F, F), axis=(0,1))
+    windows =windows[::S, ::S]  #stride           
 
     # reorder to align channels last for broadcasting
     # -> (H, W, F, F, C_in, N)
-    windows = np.moveaxis(windows, (2,3), (4,5))
+    windows= np.moveaxis(windows, (2,3), (4,5))
 
-    # 2) expand dZ to multiply each window
+    #expand dZ to multiply each window
     # dZ: (H, W, C_out, N)
     # -> (H, W, 1, 1, 1, C_out, N)
-    dZ_exp = dZ[:, :, None, None, None, :, :]
+    dZ_exp= dZ[:, :, None, None, None, :, :]
 
     # 3) multiply and sum over (N, H, W)
     # result -> (F, F, C_in, C_out)
-    dW = (windows[..., None, :] * dZ_exp).sum(axis=(0,1, -1))
+    dW= (windows[..., None, :] * dZ_exp).sum(axis=(0,1, -1))
 
     return dW
 
 def conv_input_grad(dZ, W,pad_tuple):
+    #dL/dx=conv(pad(dl/dz),flipped(kernel))
+    #https://www.youtube.com/watch?v=Pn7RK7tofPg&list=PLuhqtP7jdD8CD6rOWy20INGM44kULvrHu&index=8
 
     pad_t, pad_b=pad_tuple[0]
     pad_l, pad_r=pad_tuple[1]
     # dZ: (H, W, C_out, N)
     # W : (F, F, C_in, C_out)
-
     H, W_out, C_out, N = dZ.shape
     F, _, C_in, _ = W.shape
-
     pad = F - 1
-
-    # 1) pad dZ on spatial dims
+    #pad dZ on spatial dims
     dZ_padded = np.pad(
         dZ,
         pad_width=((pad, pad), (pad, pad), (0, 0), (0, 0)),
         mode='constant',constant_values=0
     )
     
-    # 2) sliding windows from padded dZ
+    #sliding windows from padded dZ
     # -> (H_in, W_in, C_out, N, F, F)
     windows = sliding_window_view(dZ_padded, (F, F), axis=(0, 1))
 
     # reorder to put F dims together cleanly
     # -> (H_in, W_in, F, F, C_out, N)
     windows = np.moveaxis(windows, (2, 3), (4, 5))
-
-    # 3) flip W spatially AND swap Cin/Cout roles
+    #flip W spatially AND swap Cin/Cout roles
     # rot180 on spatial + transpose C dims
     # -> (F, F, C_out, C_in)
     W_flip = np.flip(W, axis=(0, 1)).transpose(0, 1, 3, 2)
-
-    # 4) multiply and sum over (F,F,C_out)
+    #multiply and sum over (F,F,C_out)
     # result -> (H_in, W_in, C_in, N)
     dX = (windows[..., None, :] * W_flip[None, None, ... , None]).sum(axis=(2, 3, 4))
 
-     # CROP to remove forward padding
+     #CROP to remove forward padding and restore original matrix before it was convolved and padded
     if pad_t or pad_b or pad_l or pad_r:
         dX = dX[pad_t : dX.shape[0] - pad_b,
                 pad_l : dX.shape[1] - pad_r,

@@ -108,24 +108,22 @@ class CNN(MLP_Classifier):
             #dL/dX=E[1]@B[1].T 
             #but since for cnn we start at 1 and end at nb_cnn_layers+nb_layers:
             #becomes dL/dX=E[nb_cnn_layers+1]@B[nb_cnn_layers+1].T =: dL_dX
-            dL_dX=self.E[self.nb_cnn_layers+1]@self.B[self.nb_cnn_layers+1].T
-     
+            grad=self.E[self.nb_cnn_layers+1]@self.B[self.nb_cnn_layers+1].T
 
-            grad=None
-            grad_wrt_ACV=None
+           
             for l in range(self.nb_cnn_layers, 0, -1):
                 # print(l,self.network[l]["layer_type"].__name__)
                 
                 #i suppose that at l==self.nb_cnn_layers we have flattenlayer (logic,but i admit that future error validation can be useful )
                 if l==self.nb_cnn_layers:
-                    grad=flatten_backward(dL_dX, self.network[l]["original_shape"])
+                    grad=flatten_backward(grad, self.network[l]["original_shape"])
                 elif self.network[l]["layer_type"].__name__=="MaxPoolLayer":
 
 
-                    grad_wrt_ACV=maxpool_backward_general(grad,self.maskMP[l],self.network[l]["shape_input_matrix"],self.network[l]["kernel_size"],self.network[l]["stride"])
+                    grad=maxpool_backward_general(grad,self.maskMP[l],self.network[l]["shape_input_matrix"],self.network[l]["kernel_size"],self.network[l]["stride"])
 
                 elif self.network[l]["layer_type"].__name__=="ConvLayer":
-                    grad_wrt_CV=grad_wrt_ACV*super().uʹ(self.CV[l], self.network[l]["activ_fct"])
+                    grad_wrt_CV=grad*super().uʹ(self.CV[l], self.network[l]["activ_fct"])
                     #let dCV_dkernel,dCV_dbias be gradients dicts
                     #stride is always 1 for conv in my setting 
                     
