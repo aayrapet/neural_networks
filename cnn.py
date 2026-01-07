@@ -1,5 +1,5 @@
 from layers import ConvLayer,MaxPoolLayer,Layer,FlatLayer
-from main import MLP_Classifier
+from mlp import MLP_Classifier
 import numpy as np
 from sklearn.metrics import accuracy_score
 from numpy_cnn_operations import *

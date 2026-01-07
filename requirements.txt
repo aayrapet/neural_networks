@@ -4,4 +4,4 @@ scikit-learn==1.7.2
 optuna==4.5.0
 matplotlib
 tensorflow
-pickle
+
