@@ -1,68 +1,50 @@
 # 🧠 NN-from-Scratch
 
-*A journey into building a deep learning library from the ground up.*
+* Challenge : building a deep learning library in numpy*
 
 ---
 
-## 🚀 Motivation
+This repo is a theoretical part of the  course 'Advanced Machine Learning' tought by Austin J. Stromme at ENSAE Paris, Institut Polytechnique de Paris.
 
-Instead of importing `sklearn.neural_network.MLPClassifier` or TensorFlow’s `Dense` layer, this project is about **reinventing the wheel — on purpose**.  
-
-The best way to truly understand:
-
-- **Forward propagation**
-- **Backpropagation**
-- **Weight initialization**
-- **Regularization**
-- **Optimizers**
-- **Batch_norm**
-
-…is to code them by hand.
-
-This repo is my sandbox for building and experimenting with a **Multi-Layer Perceptron (MLP)** from scratch. Other models TBD
+Also, this repo is my sandbox for building and experimenting with neural networks only in numpy. 
+Building code, testing on small datasets, doing math and derivations ... all for future interviews/research/general culture.
 
 
-The link to theoretical pdf: [https://www.overleaf.com/read/pmbzgsrrdxws#08d781](https://www.overleaf.com/read/pmbzgsrrdxws#08d781)
+The link to theoretical pdf on which code was inspired: [https://www.overleaf.com/read/pmbzgsrrdxws#08d781](https://www.overleaf.com/read/pmbzgsrrdxws#08d781)
 
 ---
 
 ## 🛠️ Features (so far)
 
-- ✅ Custom `Layer` class to define architecture
-- ✅ Strong parameter validation with friendly error messages
+### MLP
+
+
 - ✅ Activation functions: **Sigmoid**, **ReLU**, **Tanh**
 - ✅ Initializations: **Random**, **Xavier**, **He**, **LeCun**
-- ✅ Additional optimizers: **SGD**, **Mini-batch GD**, **Adam**
+- ✅ Additional optimizers: **SGD**, **Mini-batch GD**, **Adam**, **Rmsprop**, **Momentum**
 - ✅ Loss functions: **Binary Cross-Entropy**, **Multi-class Cross-Entropy**
 - ✅ Regularization: **L2**, **Dropout**
-- ✅ Training loop with convergence check and early stopping.
+- ✅ Training loop with early stopping
 - ✅ Batch-normalisation 
 
+### CNN
 
+- ✅ numpy convolutions, maxpoolings and their gradients (faster then for loops)
+- ✅ custom assymetric padding
+- ✅ full generalized infrastructure that can be extended in more recent models such as Alexnet and VGG
+- ✅ trained small model with 60K parameters only, achieving 90% of accuracy on sample of CIFAR10
 ---
 
-## 🔮 Roadmap (coming soon)
-
-- ⏳ CNN
 
 
----
-
-## 📖 Philosophy
-
-This project isn’t about outperforming PyTorch or TensorFlow.  
-It’s about **education**: exposing the internals of an MLP and exploring each design choice along the way.  
-
-Think of it as building your own "mini-Keras" to really **feel the math** behind deep learning.
-
----
-
-## ▶️ Quick Example
+## ▶️ Quick Example on MLP 
 
 ```python
 import pandas as pd
-from main import Layer, MLP_Classifier
+from mlp import Layer, MLP_Classifier
 
+# Define pandas dataset
+#....
 # Define architecture
 layers = (
     Layer(8, "tanh", regul=("dropout", 0.5), initial="xavier",batchnorm=True),
@@ -80,4 +62,44 @@ mlp.train(X_train, Y_train)
 mlp.train(X_train, Y_train,X_test,Y_test)
 # Predict
 preds = mlp.predict(X_test)
+```
+
+## ▶️ Quick Example on CNN
+
+q=CNN(
+    (
+        ConvLayer(in_channels=3,output_channels=16,kernel_size=3,stride=1),
+        MaxPoolLayer(kernel_size=3,stride=2),
+        ConvLayer(in_channels=16,output_channels=32,kernel_size=3,stride=1),
+        MaxPoolLayer(kernel_size=3,stride=2),
+        FlatLayer(),
+        Layer(
+                nb_neurons=64,
+                activation_function="relu",
+                regul=("l2", 0.001),
+                initial="he",
+                batchnorm=True
+            ),
+            Layer(
+                nb_neurons=32,
+                activation_function="relu",
+                regul=("l2", 0.001),
+                initial="he",  
+            ),
+    ),
+    max_iter=30,
+    thr=1e-5,
+    alpha=0.05,
+    seed=123,
+    batch_size=500,
+)
+
+q.train(
+     
+        X_train,
+        Y_train,
+        X_test ,
+        Y_test ,
+        fct  = accuracy_score
+)
 
