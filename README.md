@@ -15,13 +15,13 @@ Theoretical report on which the implementation is based: [https://www.overleaf.c
 
 ### MLP
 
-• Activation functions: Sigmoid, ReLU, Tanh
-• Initializations: Random, Xavier, He, LeCun
-• Optimizers: SGD, Mini-batch GD, Momentum, RMSProp, Adam
-• Loss functions: Binary Cross-Entropy, Multi-class Cross-Entropy
-• Regularization: L2, Dropout
-• Training loop with early stopping
-• Batch Normalization
+- Activation functions: Sigmoid, ReLU, Tanh
+- Initializations: Random, Xavier, He, LeCun
+- Optimizers: SGD, Mini-batch GD, Momentum, RMSProp, Adam
+- Loss functions: Binary Cross-Entropy, Multi-class Cross-Entropy
+- Regularization: L2, Dropout
+- Training loop with early stopping
+- Batch Normalization
 
 ### CNN
 
