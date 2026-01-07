@@ -1,13 +1,10 @@
-# 🧠 NN-from-Scratch
+# 🧠 Challenge : building a deep learning library in numpy
 
-* Challenge : building a deep learning library in numpy*
 
 ---
 
-This repo is a theoretical part of the  course 'Advanced Machine Learning' tought by Austin J. Stromme at ENSAE Paris, Institut Polytechnique de Paris.
-
-Also, this repo is my sandbox for building and experimenting with neural networks only in numpy. 
-Building code, testing on small datasets, doing math and derivations ... all for future interviews/research/general culture.
+This repository accompanies the final project of the course ‘Advanced Machine Learning’ taught by Austin J. Stromme at ENSAE Paris (Institut Polytechnique de Paris).
+It serves as a workspace for developing and experimenting with neural networks implemented purely in NumPy, including code development, small-scale experiments, theoretical derivations, and methodological explorations, for learning, research preparation, and interview readiness.
 
 
 The link to theoretical pdf on which code was inspired: [https://www.overleaf.com/read/pmbzgsrrdxws#08d781](https://www.overleaf.com/read/pmbzgsrrdxws#08d781)
