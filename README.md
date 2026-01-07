@@ -6,31 +6,30 @@
 This repository accompanies the final project of the course ‘Advanced Machine Learning’ taught by Austin J. Stromme at ENSAE Paris (Institut Polytechnique de Paris).
 It serves as a workspace for developing and experimenting with neural networks implemented purely in NumPy, including code development, small-scale experiments, theoretical derivations, and methodological explorations, for learning, research preparation, and interview readiness.
 
-
-The link to theoretical pdf on which code was inspired: [https://www.overleaf.com/read/pmbzgsrrdxws#08d781](https://www.overleaf.com/read/pmbzgsrrdxws#08d781)
+Reference document:
+Theoretical report on which the implementation is based: [https://www.overleaf.com/read/pmbzgsrrdxws#08d781](https://www.overleaf.com/read/pmbzgsrrdxws#08d781)
 
 ---
 
-## 🛠️ Features (so far)
+## 🛠️ Features 
 
 ### MLP
 
-
-- ✅ Activation functions: **Sigmoid**, **ReLU**, **Tanh**
-- ✅ Initializations: **Random**, **Xavier**, **He**, **LeCun**
-- ✅ Additional optimizers: **SGD**, **Mini-batch GD**, **Adam**, **Rmsprop**, **Momentum**
-- ✅ Loss functions: **Binary Cross-Entropy**, **Multi-class Cross-Entropy**
-- ✅ Regularization: **L2**, **Dropout**
-- ✅ Training loop with early stopping
-- ✅ Batch-normalisation 
+• Activation functions: Sigmoid, ReLU, Tanh
+• Initializations: Random, Xavier, He, LeCun
+• Optimizers: SGD, Mini-batch GD, Momentum, RMSProp, Adam
+• Loss functions: Binary Cross-Entropy, Multi-class Cross-Entropy
+• Regularization: L2, Dropout
+• Training loop with early stopping
+• Batch Normalization
 
 ### CNN
 
-- ✅ numpy convolutions, maxpoolings and their gradients (faster then for loops)
-- ✅ custom assymetric padding
-- ✅ full generalized infrastructure that can be extended in more recent models such as Alexnet and VGG
-- ✅ trained small model with 60K parameters only, achieving 90% of accuracy on sample of CIFAR10
----
+• NumPy-based convolutions and max-pooling with efficient implementations
+• Custom asymmetric padding support
+• Architecture foundation extendable towards AlexNet / VGG-style networks
+• Trained prototype achieving ~90% accuracy on a CIFAR-10 subset with ~60k parameters
+
 
 
 
@@ -38,7 +37,7 @@ The link to theoretical pdf on which code was inspired: [https://www.overleaf.co
 
 ```python
 import pandas as pd
-from mlp import Layer, MLP_Classifier
+from mlp import Layer, MLP_Clasifier
 
 # Define pandas dataset
 #....
@@ -50,7 +49,7 @@ layers = (
 )
 
 # Instantiate model
-mlp = MLP_Classifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam", batch_size=100, nb_epochs_early_stopping=50)
+mlp = MLP_Clasifier(layers, alpha=0.01, max_iter=1000, seed=42, optim="adam", batch_size=100, nb_epochs_early_stopping=50)
 
 # Train (X, Y must be pandas DataFrames)
 mlp.train(X_train, Y_train)
@@ -63,6 +62,8 @@ preds = mlp.predict(X_test)
 
 ## ▶️ Quick Example on CNN
 
+
+```python
 q=CNN(
     (
         ConvLayer(in_channels=3,output_channels=16,kernel_size=3,stride=1),
