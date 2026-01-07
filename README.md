@@ -25,10 +25,10 @@ Theoretical report on which the implementation is based: [https://www.overleaf.c
 
 ### CNN
 
-• NumPy-based convolutions and max-pooling with efficient implementations
-• Custom asymmetric padding support
-• Architecture foundation extendable towards AlexNet / VGG-style networks
-• Trained prototype achieving ~90% accuracy on a CIFAR-10 subset with ~60k parameters
+- NumPy-based convolutions and max-pooling with efficient implementations
+- Custom asymmetric padding support
+- Architecture foundation extendable towards AlexNet / VGG-style networks
+- Trained prototype achieving ~90% accuracy on a CIFAR-10 subset with ~60k parameters
 
 
 
