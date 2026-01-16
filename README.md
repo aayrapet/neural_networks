@@ -12,6 +12,7 @@ Theoretical report on which the implementation is based: [https://www.overleaf.c
 ---
 
 Execution is available in main.ipynb
+with installed required packages in requirements.txt
 
 
 ## 🛠️ Features 
