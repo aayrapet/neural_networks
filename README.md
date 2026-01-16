@@ -11,6 +11,9 @@ Theoretical report on which the implementation is based: [https://www.overleaf.c
 
 ---
 
+Execution is avaliable in main.ipynb
+
+
 ## 🛠️ Features 
 
 ### MLP
@@ -29,6 +32,7 @@ Theoretical report on which the implementation is based: [https://www.overleaf.c
 - Custom asymmetric padding support
 - Architecture foundation extendable towards AlexNet / VGG-style networks
 - Trained prototype achieving ~90% accuracy on a CIFAR-10 subset with ~60k parameters
+
 
 
 
