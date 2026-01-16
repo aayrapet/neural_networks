@@ -11,7 +11,7 @@ Theoretical report on which the implementation is based: [https://www.overleaf.c
 
 ---
 
-Execution is avaliable in main.ipynb
+Execution is available in main.ipynb
 
 
 ## 🛠️ Features 
